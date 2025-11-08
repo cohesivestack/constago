@@ -1,5 +1,7 @@
 # Constago
 
+> **⚠️ Warning: This project is in early development stage and is not ready for production use.**
+
 Constago is a Go code generator that scans your codebase for struct types and generates constants, accessor structs, and getter functions derived from struct field tags and names. It helps you replace hard‑coded strings and ad‑hoc reflection with type‑safe, discoverable APIs.
 
 What you can generate:
