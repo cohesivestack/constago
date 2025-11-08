@@ -958,7 +958,7 @@ func TestConfigValidate(t *testing.T) {
 							Transform: ConfigTagOutputTransform{
 								TagValues:      boolPtr(false),
 								ValueCase:      TransformCaseAsIs,
-								ValueSeparator: "",
+								ValueSeparator: " ",
 							},
 						},
 					},

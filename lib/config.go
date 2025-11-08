@@ -175,7 +175,6 @@ func (c *ConfigTag) validate() *v.Validation {
 			In("transform", v.Is(
 				v.BoolP(c.Output.Transform.TagValues, "tag_values").Not().Nil(),
 				v.String(c.Output.Transform.ValueCase, "value_case").Not().Blank().InSlice(validTransformCases, validTransformCasesErrorMessage),
-				v.String(c.Output.Transform.ValueSeparator, "value_separator").Empty().Or().Passing(isValidGoIdentifier, validGoIdentifierErrorMessage),
 			)),
 		)
 }
