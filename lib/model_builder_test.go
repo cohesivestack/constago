@@ -1477,3 +1477,117 @@ type Admin struct {
 		})
 	}
 }
+
+func TestModelBuilderBuildConstantsWithTransform(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create a test Go file with structs
+	testFile := filepath.Join(tempDir, "user.go")
+	content := `package main
+
+type User struct {
+	FirstName string ` + "`json:\"first_name\"`" + `
+	LastName string ` + "`json:\"last_name\"`" + `
+	Age  int ` + "`json:\"age\"`" + `
+	Country string ` + "`json:\"country\"`" + `
+}
+`
+	require.NoError(t, os.WriteFile(testFile, []byte(content), 0644))
+
+	buildConfig := func() (*Config, error) {
+		return NewConfig(&Config{
+			Input: ConfigInput{
+				Dir: tempDir,
+				Struct: ConfigInputStruct{
+					Explicit:          boolPtr(false),
+					IncludeUnexported: boolPtr(false),
+				},
+				Field: ConfigInputField{
+					Explicit:          boolPtr(false),
+					IncludeUnexported: boolPtr(false),
+				},
+			},
+			Elements: []ConfigTag{
+				{
+					Name: "json",
+					Input: ConfigTagInput{
+						Mode:        InputModeTypeTagThenField,
+						TagPriority: []string{"json"},
+					},
+					Output: ConfigTagOutput{
+						Mode: OutputModeConstant,
+					},
+				},
+				{
+					Name: "title",
+					Input: ConfigTagInput{
+						Mode:        InputModeTypeTagThenField,
+						TagPriority: []string{"json"},
+					},
+					Output: ConfigTagOutput{
+						Mode: OutputModeConstant,
+						Transform: ConfigTagOutputTransform{
+							TagValues:      boolPtr(true),
+							ValueCase:      TransformCasePascal,
+							ValueSeparator: " ",
+						},
+					},
+				},
+			},
+		})
+	}
+
+	tests := []struct {
+		name              string
+		setConfig         func(*Config)
+		expectedConstants map[string]map[string]string
+	}{
+		{
+			name:      "Transform value case and separator",
+			setConfig: func(baseConfig *Config) {},
+			expectedConstants: map[string]map[string]string{
+				"User": {
+					"JsonUserFirstName":  "first_name",
+					"TitleUserFirstName": "First Name",
+					"JsonUserLastName":   "last_name",
+					"TitleUserLastName":  "Last Name",
+					"JsonUserAge":        "age",
+					"TitleUserAge":       "Age",
+					"JsonUserCountry":    "country",
+					"TitleUserCountry":   "Country",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			baseConfig, err := buildConfig()
+			require.NoError(t, err)
+			tt.setConfig(baseConfig)
+
+			scanner := NewModelBuilder(baseConfig)
+			require.NoError(t, err)
+
+			err = scanner.scanFile(testFile)
+			require.NoError(t, err)
+
+			assert.Len(t, scanner.model.Packages, 1)
+
+			assert.Equal(t, 1, scanner.model.FilesScanned)
+			assert.Equal(t, len(tt.expectedConstants), scanner.model.StructsFound)
+			assert.Equal(t, len(tt.expectedConstants), len(scanner.model.Packages[tempDir].Structs))
+
+			for _, structModel := range scanner.model.Packages[tempDir].Structs {
+				assert.Len(t, structModel.Constants, len(tt.expectedConstants[structModel.Name]))
+
+				assert.Len(t, structModel.Structs, 0)
+				assert.Len(t, structModel.Getters, 0)
+
+				for _, constant := range structModel.Constants {
+					assert.Equal(t, tt.expectedConstants[structModel.Name][constant.Name], constant.Value, fmt.Sprintf("Value expected for %s.%s", structModel.Name, constant.Name))
+				}
+			}
+		})
+	}
+}
