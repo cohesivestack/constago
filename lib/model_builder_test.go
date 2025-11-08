@@ -1119,6 +1119,10 @@ type Admin struct {
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].None, returnOutput.None)
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value, returnOutput.Value)
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Field, returnOutput.Field)
+						if tt.expectedGetters[structModel.Name][getter.Name][i].Value != nil {
+							assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value.TypePackage, returnOutput.Value.TypePackage)
+							assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value.TypeName, returnOutput.Value.TypeName)
+						}
 					}
 				}
 			}
@@ -1271,7 +1275,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Name",
-								TypeName:  "String",
+								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/strings",
 									Name: "strings",
@@ -1289,7 +1293,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Age",
-								TypeName:  "Integer",
+								TypeName:  "integers.Integer",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/integers",
 									Name: "integers",
@@ -1307,7 +1311,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Country",
-								TypeName:  "String",
+								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/strings",
 									Name: "strings",
@@ -1343,7 +1347,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "address",
-								TypeName:  "String",
+								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/strings",
 									Name: "strings",
@@ -1361,7 +1365,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Enabled",
-								TypeName:  "Boolean",
+								TypeName:  "binary.Boolean",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/booleans",
 									Name: "booleans",
@@ -1379,7 +1383,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Height",
-								TypeName:  "Float",
+								TypeName:  "floats.Float",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/floats/v1",
 									Name: "floats",
@@ -1417,7 +1421,7 @@ type Admin struct {
 						{
 							Value: &ValueOutput{
 								FieldName: "Role",
-								TypeName:  "String",
+								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
 									Path: "github.com/example/strings",
 									Name: "strings",

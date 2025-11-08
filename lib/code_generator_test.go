@@ -283,7 +283,7 @@ import (
 
 	expectedGetter := `
 // GetValueName returns the configured values for User
-func (_struct *User) GetValueName() (Builder) {
+func (_struct *User) GetValueName() (strings.Builder) {
 	return  _struct.Name
 }`
 	assert.Contains(t, generatedStr, expectedGetter)

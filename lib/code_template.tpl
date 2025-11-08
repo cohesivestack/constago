@@ -9,7 +9,9 @@ package {{ .Package.Name }}
 
 import (
 {{- range $alias, $import := .Package.Imports }}
+{{- if $import.Path }}
 	{{ if $import.Alias }}{{ $import.Alias }}{{ else }}{{ $import.Name }}{{ end }} "{{ $import.Path }}"
+{{- end }}
 {{- end }}
 )
 

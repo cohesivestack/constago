@@ -587,7 +587,7 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 			if imp, ok := importIndex[ident.Name]; ok {
 				// For external packages, preserve the full qualified type name
 				// For local packages, return just the type name
-				if imp.Path == "" || strings.HasPrefix(imp.Path, modulePath) {
+				if imp.Path == "" {
 					// Local package - return just the type name
 					return t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
 				} else {
@@ -598,7 +598,7 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 			// Secondary lookup: find any import whose real Name matches the ident
 			for _, imp := range importIndex {
 				if imp != nil && imp.Name == ident.Name {
-					if imp.Path == "" || strings.HasPrefix(imp.Path, modulePath) {
+					if imp.Path == "" {
 						return t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
 					} else {
 						return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
@@ -608,7 +608,7 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 			// Tertiary lookup: find any import whose path contains the ident as a segment (handles paths like gopkg.in/yaml.v3)
 			for _, imp := range importIndex {
 				if imp != nil && importPathHasSegment(imp.Path, ident.Name) {
-					if imp.Path == "" || strings.HasPrefix(imp.Path, modulePath) {
+					if imp.Path == "" {
 						return t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
 					} else {
 						return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
