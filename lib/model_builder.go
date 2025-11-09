@@ -7,6 +7,7 @@ import (
 	goScanner "go/scanner"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -215,6 +216,7 @@ func (b *modelBuilder) scanFile(filePath string) error {
 	packageName := node.Name.Name
 	// Build import index for resolving selector types to full import info
 	importIndex, modulePath := b.buildImportIndex(node, filePath)
+	moduleDir, _ := locateGoModule(filePath)
 
 	// Aggregations are per-struct, so they will be initialized inside the struct loop
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -328,7 +330,7 @@ func (b *modelBuilder) scanFile(filePath string) error {
 							if strings.HasPrefix(ret, ":") {
 								if ret == ":value" {
 									// Create ValueOutput for field value return
-									valueOutput := b.createValueOutput(field, fieldName, packageName, importIndex, modulePath)
+									valueOutput := b.createValueOutput(field, fieldName, packageName, importIndex, modulePath, moduleDir)
 									if valueOutput != nil {
 										getter.Returns = append(getter.Returns, &ReturnOutput{Value: valueOutput})
 									}
@@ -522,7 +524,7 @@ func lookupTag(tags reflect.StructTag, key string) (string, bool) {
 }
 
 // createValueOutput creates a ValueOutput from an AST field
-func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, packageName string, importIndex map[string]*TypePackageOutput, modulePath string) *ValueOutput {
+func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, packageName string, importIndex map[string]*TypePackageOutput, modulePath string, moduleDir string) *ValueOutput {
 	if field.Type == nil {
 		return nil
 	}
@@ -533,6 +535,7 @@ func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, pac
 	}
 
 	// Last-chance: if pkg has name but no path, try to resolve from importIndex
+	// Look for any entry with the same name that has a path
 	if pkg != nil && pkg.Path == "" && pkg.Name != "" {
 		for _, imp := range importIndex {
 			if imp != nil && imp.Name == pkg.Name && imp.Path != "" {
@@ -546,10 +549,42 @@ func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, pac
 		parts := strings.SplitN(typeName, ".", 2)
 		if len(parts) == 2 {
 			pkgName := parts[0]
+			// First try to find an entry with the name that has a path
 			for _, imp := range importIndex {
 				if imp != nil && imp.Name == pkgName && imp.Path != "" {
 					pkg = &TypePackageOutput{Path: imp.Path, Name: imp.Name}
 					break
+				}
+			}
+			// If still not found, try to find by the identifier used in code (e.g., "yaml.v3")
+			if pkg == nil || pkg.Path == "" {
+				for key, imp := range importIndex {
+					if imp != nil && strings.Contains(key, pkgName) && imp.Path != "" {
+						// Check if this looks like the right import (contains the package name)
+						if strings.Contains(imp.Path, pkgName) || importPathHasSegment(imp.Path, pkgName) {
+							// Use the package name from the entry, but if it looks like an identifier (contains dots),
+							// try to get the actual package name from go list or infer from path
+							name := imp.Name
+							if strings.Contains(name, ".") {
+								// The name looks like an identifier (e.g., "yaml.v3"), try to get the real package name
+								if realPkgName := getPackageNameFromGoList(imp.Path, moduleDir); realPkgName != "" {
+									name = realPkgName
+								} else {
+									// Fallback: for patterns like gopkg.in/yaml.v3, the package name is usually the part before the dot
+									// Extract from path if it matches common patterns
+									if strings.HasPrefix(imp.Path, "gopkg.in/") {
+										// For gopkg.in/x.y, package name is usually x
+										parts := strings.Split(strings.TrimPrefix(imp.Path, "gopkg.in/"), ".")
+										if len(parts) > 0 {
+											name = parts[0]
+										}
+									}
+								}
+							}
+							pkg = &TypePackageOutput{Path: imp.Path, Name: name}
+							break
+						}
+					}
 				}
 			}
 		}
@@ -596,23 +631,31 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 				}
 			}
 			// Secondary lookup: find any import whose real Name matches the ident
+			// Prefer entries with non-empty paths
+			var bestMatch *TypePackageOutput
 			for _, imp := range importIndex {
 				if imp != nil && imp.Name == ident.Name {
-					if imp.Path == "" {
-						return t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
-					} else {
-						return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
+					if imp.Path != "" {
+						bestMatch = imp
+						break // Found a match with a path, use it
+					} else if bestMatch == nil {
+						// Keep this as fallback if no path match found yet
+						bestMatch = imp
 					}
 				}
 			}
+			if bestMatch != nil {
+				if bestMatch.Path == "" {
+					return t.Sel.Name, &TypePackageOutput{Path: bestMatch.Path, Name: bestMatch.Name}
+				} else {
+					return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: bestMatch.Path, Name: bestMatch.Name}
+				}
+			}
 			// Tertiary lookup: find any import whose path contains the ident as a segment (handles paths like gopkg.in/yaml.v3)
+			// Prefer entries with non-empty paths
 			for _, imp := range importIndex {
-				if imp != nil && importPathHasSegment(imp.Path, ident.Name) {
-					if imp.Path == "" {
-						return t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
-					} else {
-						return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
-					}
+				if imp != nil && importPathHasSegment(imp.Path, ident.Name) && imp.Path != "" {
+					return ident.Name + "." + t.Sel.Name, &TypePackageOutput{Path: imp.Path, Name: imp.Name}
 				}
 			}
 			// Fallback: unknown import; keep ident as package name but do not lose selector context
@@ -680,22 +723,10 @@ func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) 
 					ident = path
 				}
 			} else {
-				// External package - Go typically uses the package name, not the path segment
-				// For most external packages, the package name is the last segment
-				// But for some patterns like gopkg.in/x.y, the package name is x
+				// External package - use last segment as initial identifier
+				// The actual package name will be resolved later by reading from source
 				if i := strings.LastIndex(path, "/"); i >= 0 {
-					lastSegment := path[i+1:]
-					// Handle common patterns where package name differs from path segment
-					if strings.Contains(lastSegment, ".") && !strings.Contains(lastSegment, "-") {
-						// Likely a versioned package like yaml.v3, use the part before the dot
-						if dotIndex := strings.LastIndex(lastSegment, "."); dotIndex > 0 {
-							ident = lastSegment[:dotIndex]
-						} else {
-							ident = lastSegment
-						}
-					} else {
-						ident = lastSegment
-					}
+					ident = path[i+1:]
 				} else {
 					ident = path
 				}
@@ -707,14 +738,24 @@ func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) 
 			continue
 		}
 
-		// For local packages within the same module, try to read the actual package name
+		// Try to read the actual package name from source files
 		realName := ident // Default to the identifier
 		if moduleDir != "" && modulePath != "" && strings.HasPrefix(path, modulePath) {
+			// Local package - read from local directory
 			rel := strings.TrimPrefix(path, modulePath)
 			rel = strings.TrimPrefix(rel, "/")
 			pkgDir := filepath.Join(moduleDir, filepath.FromSlash(rel))
 			if name := readPackageName(pkgDir); name != "" {
 				realName = name
+			}
+		} else {
+			// External package - use go list to get the actual package name
+			// This is the most reliable way to get the package name
+			if pkgName := getPackageNameFromGoList(path, moduleDir); pkgName != "" {
+				realName = pkgName
+			} else if pkgName := readPackageNameFromImportPath(path); pkgName != "" {
+				// Fallback: try to read from module cache
+				realName = pkgName
 			}
 		}
 
@@ -722,8 +763,10 @@ func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) 
 		// (helps when selector uses real name and import used alias, or vice versa)
 		idx[ident] = &TypePackageOutput{Path: path, Name: realName}
 		if ident != realName {
-			// Do not overwrite an existing, but ensure at least one entry under realName
-			if _, exists := idx[realName]; !exists {
+			// Always store/update the entry under realName with the path to ensure it's available
+			// This ensures lookups by package name can find the correct import path
+			existing, exists := idx[realName]
+			if !exists || existing.Path == "" {
 				idx[realName] = &TypePackageOutput{Path: path, Name: realName}
 			}
 		}
@@ -799,4 +842,107 @@ func importPathHasSegment(path string, seg string) bool {
 		}
 	}
 	return false
+}
+
+// getPackageNameFromGoList uses `go list` to get the actual package name for an import path.
+// This is the most reliable way to get the package name for external packages.
+func getPackageNameFromGoList(importPath string, moduleDir string) string {
+	// Use go list to get the package name
+	// This works for any import path, including versioned modules
+	cmd := exec.Command("go", "list", "-f", "{{.Name}}", importPath)
+	if moduleDir != "" {
+		cmd.Dir = moduleDir
+	}
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	name := strings.TrimSpace(string(output))
+	if name != "" && name != "main" {
+		return name
+	}
+	return ""
+}
+
+// readPackageNameFromImportPath attempts to read the actual package name from an external import path
+// by looking in the Go module cache. Returns empty string if not found or not accessible.
+// This is a fallback when go list is not available or fails.
+func readPackageNameFromImportPath(importPath string) string {
+	// Try to find the package in GOPATH/pkg/mod or GOMODCACHE
+	// This is a best-effort approach
+	gopath := os.Getenv("GOPATH")
+	gomodcache := os.Getenv("GOMODCACHE")
+
+	var searchPaths []string
+	if gomodcache != "" {
+		searchPaths = append(searchPaths, gomodcache)
+	}
+	if gopath != "" {
+		searchPaths = append(searchPaths, filepath.Join(gopath, "pkg", "mod"))
+	}
+
+	for _, basePath := range searchPaths {
+		// For versioned modules like github.com/gofrs/uuid/v5, the cache structure is:
+		// basePath/github.com/gofrs/uuid@v5.4.0/v5
+		// We need to find the module directory and then the versioned subdirectory
+
+		// Split the import path to find the module base
+		parts := strings.Split(importPath, "/")
+		if len(parts) < 2 {
+			continue
+		}
+
+		// Try to find the module directory (e.g., github.com/gofrs/uuid@v5.4.0)
+		// by looking for directories that match the module pattern
+		moduleBase := strings.Join(parts[:len(parts)-1], "/")
+		lastSegment := parts[len(parts)-1]
+
+		// Check if last segment is a version suffix (v1, v2, v5, etc.)
+		isVersionSuffix := len(lastSegment) >= 2 && lastSegment[0] == 'v' &&
+			func() bool {
+				for i := 1; i < len(lastSegment); i++ {
+					if lastSegment[i] < '0' || lastSegment[i] > '9' {
+						return false
+					}
+				}
+				return true
+			}()
+
+		if isVersionSuffix {
+			// Look for module directories matching the base path
+			moduleBaseDir := filepath.Join(basePath, filepath.FromSlash(moduleBase))
+			parentDir := filepath.Dir(moduleBaseDir)
+			moduleName := filepath.Base(moduleBaseDir)
+
+			if entries, err := os.ReadDir(parentDir); err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() {
+						continue
+					}
+					// Look for directories like "uuid@v5.4.0" or "uuid@v5.x.x"
+					entryName := entry.Name()
+					if strings.HasPrefix(entryName, moduleName+"@") {
+						// Found the module directory, now look for the versioned subdirectory
+						moduleDir := filepath.Join(parentDir, entryName)
+						versionedPath := filepath.Join(moduleDir, lastSegment)
+						if name := readPackageName(versionedPath); name != "" {
+							return name
+						}
+						// Also try the module root in case the package is at the root
+						if name := readPackageName(moduleDir); name != "" {
+							return name
+						}
+					}
+				}
+			}
+		}
+
+		// Fallback: try the import path directly (for non-versioned or different structures)
+		pkgPath := filepath.Join(basePath, filepath.FromSlash(importPath))
+		if name := readPackageName(pkgPath); name != "" {
+			return name
+		}
+	}
+
+	return ""
 }

@@ -1136,7 +1136,7 @@ func TestModelBuilderBuildGetterWithPackageTypeReturn(t *testing.T) {
 
 	// Create a temporary module and dependency packages
 	// go.mod
-	goMod := "module github.com/example\n\ngo 1.22\n\nrequire (\ngopkg.in/yaml.v3 v3.0.1\n)\n"
+	goMod := "module github.com/example\n\ngo 1.22\n\nrequire (\ngopkg.in/yaml.v3 v3.0.1\ngithub.com/gofrs/uuid/v5 v5.4.0\n)\n"
 	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goMod), 0644))
 
 	// Run go mod tidy to generate go.sum for external dependencies
@@ -1178,9 +1178,11 @@ import (
 	binary "github.com/example/booleans"
   "github.com/example/floats/v1"
 	"gopkg.in/yaml.v3"
+	"github.com/gofrs/uuid/v5"
 )
 
 type User struct {
+	ID uuid.UUID ` + "`json:\"id\" title:\"ID\"`" + `
 	Name strings.String ` + "`json:\"name\" title:\"Name\" field:\"field_name\"`" + `
 	Age  integers.Integer ` + "`json:\"age\" title:\"Age\"`" + `
 	Country strings.String ` + "`json:\"country\" title:\"Country\" field:\"field_country\" constago:\"include\"`" + `
@@ -1271,14 +1273,34 @@ type Admin struct {
 			},
 			expectedGetters: map[string]map[string][]ReturnOutput{
 				"User": {
+					"VId": {
+						{
+							Value: &ValueOutput{
+								FieldName: "ID",
+								TypeName:  "uuid.UUID",
+								TypePackage: &TypePackageOutput{
+									Path:  "github.com/gofrs/uuid/v5",
+									Name:  "uuid",
+									Alias: "",
+								},
+							},
+						},
+						{
+							None: &NoneOutput{
+								Name:  "json",
+								Value: "id",
+							},
+						},
+					},
 					"VName": {
 						{
 							Value: &ValueOutput{
 								FieldName: "Name",
 								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/strings",
-									Name: "strings",
+									Path:  "github.com/example/strings",
+									Name:  "strings",
+									Alias: "",
 								},
 							},
 						},
@@ -1295,8 +1317,9 @@ type Admin struct {
 								FieldName: "Age",
 								TypeName:  "integers.Integer",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/integers",
-									Name: "integers",
+									Path:  "github.com/example/integers",
+									Name:  "integers",
+									Alias: "",
 								},
 							},
 						},
@@ -1313,8 +1336,9 @@ type Admin struct {
 								FieldName: "Country",
 								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/strings",
-									Name: "strings",
+									Path:  "github.com/example/strings",
+									Name:  "strings",
+									Alias: "",
 								},
 							},
 						},
@@ -1331,8 +1355,9 @@ type Admin struct {
 								FieldName: "Phone",
 								TypeName:  "string",
 								TypePackage: &TypePackageOutput{
-									Path: "",
-									Name: "main",
+									Path:  "",
+									Name:  "main",
+									Alias: "",
 								},
 							},
 						},
@@ -1349,8 +1374,9 @@ type Admin struct {
 								FieldName: "address",
 								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/strings",
-									Name: "strings",
+									Path:  "github.com/example/strings",
+									Name:  "strings",
+									Alias: "",
 								},
 							},
 						},
@@ -1367,8 +1393,9 @@ type Admin struct {
 								FieldName: "Enabled",
 								TypeName:  "binary.Boolean",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/booleans",
-									Name: "booleans",
+									Path:  "github.com/example/booleans",
+									Name:  "booleans",
+									Alias: "",
 								},
 							},
 						},
@@ -1385,8 +1412,9 @@ type Admin struct {
 								FieldName: "Height",
 								TypeName:  "floats.Float",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/floats/v1",
-									Name: "floats",
+									Path:  "github.com/example/floats/v1",
+									Name:  "floats",
+									Alias: "",
 								},
 							},
 						},
@@ -1403,8 +1431,9 @@ type Admin struct {
 								FieldName: "Node",
 								TypeName:  "yaml.Node",
 								TypePackage: &TypePackageOutput{
-									Path: "gopkg.in/yaml.v3",
-									Name: "yaml",
+									Path:  "gopkg.in/yaml.v3",
+									Name:  "yaml",
+									Alias: "",
 								},
 							},
 						},
@@ -1423,8 +1452,9 @@ type Admin struct {
 								FieldName: "Role",
 								TypeName:  "strings.String",
 								TypePackage: &TypePackageOutput{
-									Path: "github.com/example/strings",
-									Name: "strings",
+									Path:  "github.com/example/strings",
+									Name:  "strings",
+									Alias: "",
 								},
 							},
 						},
@@ -1474,6 +1504,11 @@ type Admin struct {
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].None, returnOutput.None)
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value, returnOutput.Value)
 						assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Field, returnOutput.Field)
+						if tt.expectedGetters[structModel.Name][getter.Name][i].Value != nil {
+							assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value.TypePackage, returnOutput.Value.TypePackage)
+							assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value.TypeName, returnOutput.Value.TypeName)
+							assert.EqualValues(t, tt.expectedGetters[structModel.Name][getter.Name][i].Value.TypePackage.Alias, returnOutput.Value.TypePackage.Alias)
+						}
 					}
 				}
 			}
