@@ -162,3 +162,9 @@ getters:
       suffix: # Default not set
       format: "pascal" # The format if an input.field_name.tag_priority is matched. One of: camel | pascal | snake | snakeUpper. Using pascal or snakeUpper will produce exported constants. Default pascal
 ```
+
+# License
+
+Copyright © 2025 Carlos Forero
+
+Constago is released under the [MIT License](LICENSE)
