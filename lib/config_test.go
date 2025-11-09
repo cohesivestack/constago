@@ -255,7 +255,7 @@ func TestConfigSetDefaults(t *testing.T) {
 					},
 				},
 				Output: ConfigOutput{
-					FileName: "constago_gen.go",
+					FileName: "constago.gen.go",
 				},
 			},
 		},
@@ -1082,7 +1082,7 @@ func TestNewConfig(t *testing.T) {
 				assert.Equal(t, ".", config.Input.Dir)
 				assert.Equal(t, []string{"**/*.go"}, config.Input.Include)
 				assert.Equal(t, []string{"**/*_test.go"}, config.Input.Exclude)
-				assert.Equal(t, "constago_gen.go", config.Output.FileName)
+				assert.Equal(t, "constago.gen.go", config.Output.FileName)
 				assert.False(t, *config.Input.Struct.Explicit)
 				assert.False(t, *config.Input.Struct.IncludeUnexported)
 				assert.False(t, *config.Input.Field.Explicit)

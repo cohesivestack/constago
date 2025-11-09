@@ -22,7 +22,7 @@ Key features:
 - Configurable output modes: none | constant | struct
 - Formatting options for identifiers (camel, pascal, snake, snakeUpper), plus optional prefix/suffix
 - Value transformations for generated names (case and word separators)
-- Single output file per package (default `constago_gen.go`)
+- Single output file per package (default `constago.gen.go`)
 
 ## Quick Example
 
@@ -77,7 +77,7 @@ Run it in your project folder:
 constago
 ```
 
-Highlights from the generated file (`constago_gen.go`):
+Highlights from the generated file (`constago.gen.go`):
 
 ```go
 // Constants for User
@@ -126,7 +126,7 @@ input:
     include_unexported: false # If false, unexported fields are ignored unless this contains the `constago` tag. Default: false
 
 output:
-  file_name: "cosntago_gen.go" # Output file name for generated functions (must end with .go). The files with the generated functions will be created in the same folder used by the source file. Default: "cosntago_gen.go"
+  file_name: "constago.gen.go" # Output file name for generated functions (must end with .go). The files with the generated functions will be created in the same folder used by the source file. Default: "constago.gen.go"
 
 elements:
   - name: "title" # required

@@ -291,7 +291,7 @@ func (config *Config) setDefaults() {
 
 	// Output defaults
 	if isStringBlank(config.Output.FileName) {
-		config.Output.FileName = "constago_gen.go"
+		config.Output.FileName = "constago.gen.go"
 	}
 
 	for i := range config.Elements {
