@@ -127,9 +127,12 @@ type User struct {
 	generatedStr := string(generated)
 
 	expectedOutput := `
-type JsonUser struct {
+var JsonUser = struct {
 	Name string
 	Age string
+}{
+	Name: "name",
+	Age: "age",
 }`
 	assert.Contains(t, generatedStr, expectedOutput)
 }
@@ -685,15 +688,10 @@ const (
 	TitleUserCountry = "Country"
 )
 // FieldUser contains field constants for User
-type FieldUser struct {
+var FieldUser = struct {
 	Name string
-}
-
-// NewFieldUser creates a new FieldUser instance
-func NewFieldUser() *FieldUser {
-	return &FieldUser{
-		Name: "name_field",
-	}
+}{
+	Name: "name_field",
 }
 // GetAllName returns the configured values for User
 func (_struct *User) GetAllName() (string, string, string) {

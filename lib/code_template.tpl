@@ -29,19 +29,14 @@ const (
 {{- if $struct.Structs }}
 {{- range $structOutput := $struct.Structs }}
 // {{ $structOutput.Name }} contains field constants for {{ $struct.Name }}
-type {{ $structOutput.Name }} struct {
+var {{ $structOutput.Name }} = struct {
 {{- range $field := $structOutput.Fields }}
 	{{ $field.Name }} string
 {{- end }}
-}
-
-// New{{ $structOutput.Name }} creates a new {{ $structOutput.Name }} instance
-func New{{ $structOutput.Name }}() *{{ $structOutput.Name }} {
-	return &{{ $structOutput.Name }}{
+}{
 {{- range $field := $structOutput.Fields }}
-		{{ $field.Name }}: "{{ $field.Value }}",
+	{{ $field.Name }}: "{{ $field.Value }}",
 {{- end }}
-	}
 }
 
 {{- end }}
