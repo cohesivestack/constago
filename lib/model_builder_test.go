@@ -1147,26 +1147,31 @@ func TestModelBuilderBuildGetterWithPackageTypeReturn(t *testing.T) {
 	// github.com/example/strings
 	stringsDir := filepath.Join(tempDir, "strings")
 	require.NoError(t, os.MkdirAll(stringsDir, 0755))
-	stringsSrc := "package strings\n\n// String is a sample exported type\ntype String struct{}\n"
+	stringsSrc := "package strings\n\ntype String struct{}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(stringsDir, "strings.go"), []byte(stringsSrc), 0644))
 
 	// github.com/example/integers
 	integersDir := filepath.Join(tempDir, "integers")
 	require.NoError(t, os.MkdirAll(integersDir, 0755))
-	integersSrc := "package integers\n\n// Integer is a sample exported type\ntype Integer struct{}\n"
+	integersSrc := "package integers\n\ntype Integer struct{}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(integersDir, "integers.go"), []byte(integersSrc), 0644))
 
 	// github.com/example/booleans (aliased as binary in import)
 	booleansDir := filepath.Join(tempDir, "booleans")
 	require.NoError(t, os.MkdirAll(booleansDir, 0755))
-	booleansSrc := "package booleans\n\n// Boolean is a sample exported type\ntype Boolean struct{}\n"
+	booleansSrc := "package booleans\n\ntype Boolean struct{}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(booleansDir, "booleans.go"), []byte(booleansSrc), 0644))
 
 	// github.com/example/booleans (aliased as binary in import)
 	floatsDir := filepath.Join(tempDir, "floats", "v1")
 	require.NoError(t, os.MkdirAll(floatsDir, 0755))
-	floatsSrc := "package floats\n\n// Float is a sample exported type\ntype Float struct{}\n"
+	floatsSrc := "package floats\n\ntype Float struct{}\n"
 	require.NoError(t, os.WriteFile(filepath.Join(floatsDir, "floats.go"), []byte(floatsSrc), 0644))
+
+	genericsDir := filepath.Join(tempDir, "generics")
+	require.NoError(t, os.MkdirAll(genericsDir, 0755))
+	genericsSrc := "package generics\n\ntype Generic[T any] struct{}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(genericsDir, "generics.go"), []byte(genericsSrc), 0644))
 
 	// Create a test Go file with structs that import the above packages
 	testFile := filepath.Join(tempDir, "user.go")
@@ -1177,6 +1182,7 @@ import (
   "github.com/example/integers"
 	binary "github.com/example/booleans"
   "github.com/example/floats/v1"
+	"github.com/example/generics"
 	"gopkg.in/yaml.v3"
 	"github.com/gofrs/uuid/v5"
 )
@@ -1192,6 +1198,9 @@ type User struct {
 	Enabled binary.Boolean ` + "`json:\"enabled\" title:\"Enabled\"`" + `
 	Height floats.Float ` + "`json:\"height\" title:\"Height\"`" + `
 	Node yaml.Node ` + "`json:\"node\" title:\"Node\"`" + `
+	TypeName generics.Generic[string] ` + "`json:\"type_name\" title:\"Type Name\"`" + `
+	TypeNode generics.Generic[yaml.Node] ` + "`json:\"type_node\" title:\"Type Node\"`" + `
+	TypePair generics.Generic[string, yaml.Node] ` + "`json:\"type_pair\" title:\"Type Pair\"`" + `
 }
 
 type Admin struct {
@@ -1441,6 +1450,63 @@ type Admin struct {
 							None: &NoneOutput{
 								Name:  "json",
 								Value: "node",
+							},
+						},
+					},
+					"VTypeName": {
+						{
+							Value: &ValueOutput{
+								FieldName: "TypeName",
+								TypeName:  "generics.Generic[string]",
+								TypePackage: &TypePackageOutput{
+									Path:  "github.com/example/generics",
+									Name:  "generics",
+									Alias: "",
+								},
+							},
+						},
+						{
+							None: &NoneOutput{
+								Name:  "json",
+								Value: "type_name",
+							},
+						},
+					},
+					"VTypeNode": {
+						{
+							Value: &ValueOutput{
+								FieldName: "TypeNode",
+								TypeName:  "generics.Generic[yaml.Node]",
+								TypePackage: &TypePackageOutput{
+									Path:  "github.com/example/generics",
+									Name:  "generics",
+									Alias: "",
+								},
+							},
+						},
+						{
+							None: &NoneOutput{
+								Name:  "json",
+								Value: "type_node",
+							},
+						},
+					},
+					"VTypePair": {
+						{
+							Value: &ValueOutput{
+								FieldName: "TypePair",
+								TypeName:  "generics.Generic[string, yaml.Node]",
+								TypePackage: &TypePackageOutput{
+									Path:  "github.com/example/generics",
+									Name:  "generics",
+									Alias: "",
+								},
+							},
+						},
+						{
+							None: &NoneOutput{
+								Name:  "json",
+								Value: "type_pair",
 							},
 						},
 					},

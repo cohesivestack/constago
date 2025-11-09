@@ -696,6 +696,20 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 	case *ast.StructType:
 		// Struct type
 		return "struct{}", nil
+	case *ast.IndexExpr:
+		// Generic type with single type parameter like Generic[string], Generic[yaml.Node]
+		baseType, basePkg := b.extractTypeInfo(t.X, importIndex, modulePath)
+		indexType, _ := b.extractTypeInfo(t.Index, importIndex, modulePath)
+		return fmt.Sprintf("%s[%s]", baseType, indexType), basePkg
+	case *ast.IndexListExpr:
+		// Generic type with multiple type parameters like Generic[string, int]
+		baseType, basePkg := b.extractTypeInfo(t.X, importIndex, modulePath)
+		indexTypes := make([]string, len(t.Indices))
+		for i, index := range t.Indices {
+			indexType, _ := b.extractTypeInfo(index, importIndex, modulePath)
+			indexTypes[i] = indexType
+		}
+		return fmt.Sprintf("%s[%s]", baseType, strings.Join(indexTypes, ", ")), basePkg
 	}
 	return "", nil
 }
