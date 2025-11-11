@@ -26,8 +26,12 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 		"--input.exclude", "**/*_test.go",
 		"--input.struct.explicit", "true",
 		"--input.struct.include_unexported", "true",
+		"--input.struct.include_only", "",
+		"--input.struct.include_except", "",
 		"--input.field.explicit", "true",
 		"--input.field.include_unexported", "true",
+		"--input.field.include_only", "",
+		"--input.field.include_except", "",
 		"--output.file_name", "gen_out.go",
 	}
 	cmd.SetArgs(args)

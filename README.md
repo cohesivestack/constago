@@ -120,10 +120,14 @@ input:
   struct:
     explicit: false # If false, all structs that are in the files matched by the include configuration will be scanned, unless the directive //constago:exclude is placed above the struct. If true, the directive //constago:include must be placed above the struct. Default: false
     include_unexported: false # If true, unexported structs are included, unless this contains the `//constago:include` directive. Default false
+    include_only: # Regular expression; only struct names matching this are processed (whitelist)
+    include_except: # Regular expression; struct names matching this are excluded (blacklist)
 
   field:
     explicit: false # If true, only fields with a `constago` tag are included. When false, you can use the tag constago="exclude" to exclude specific fields. Default: false.
     include_unexported: false # If false, unexported fields are ignored unless this contains the `constago` tag. Default: false
+    include_only: # Regular expression; only field names matching this are processed (whitelist)
+    include_except: # Regular expression; field names matching this are excluded (blacklist)
 
 output:
   file_name: "constago.gen.go" # Output file name for generated functions (must end with .go). The files with the generated functions will be created in the same folder used by the source file. Default: "constago.gen.go"

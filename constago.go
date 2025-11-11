@@ -170,8 +170,14 @@ func newRootCmd(run func(*constago.Config) error) *cobra.Command {
 	cmd.Flags().Bool("input.struct.explicit", false, "Only include structs explicitly marked")
 	cmd.Flags().Bool("input.struct.include_unexported", false, "Include unexported structs when scanning")
 
+	cmd.Flags().String("input.struct.include_only", "", "Regular expression to include structs (whitelist)")
+	cmd.Flags().String("input.struct.include_except", "", "Regular expression to exclude structs (blacklist)")
+
 	cmd.Flags().Bool("input.field.explicit", false, "Only include fields explicitly marked")
 	cmd.Flags().Bool("input.field.include_unexported", false, "Include unexported fields when scanning")
+
+	cmd.Flags().String("input.field.include_only", "", "Regular expression to include fields (whitelist)")
+	cmd.Flags().String("input.field.include_except", "", "Regular expression to exclude fields (blacklist)")
 
 	// ---------- OUTPUT ----------
 	cmd.Flags().String("output.file_name", "", "Output file name (e.g., constants_gen.go)")
