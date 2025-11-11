@@ -80,14 +80,18 @@ func TestModelBuilderFindFiles(t *testing.T) {
 					Dir:     tempDir,
 					Include: []string{"**/*.go"},
 					Exclude: []string{"**/*_test.go", "internal/*.go", "utils/helper.go", "package:logic"},
-					Struct: struct {
-						Explicit          *bool `yaml:"explicit"`
-						IncludeUnexported *bool `yaml:"include_unexported"`
-					}{boolPtr(false), boolPtr(false)},
-					Field: struct {
-						Explicit          *bool `yaml:"explicit"`
-						IncludeUnexported *bool `yaml:"include_unexported"`
-					}{boolPtr(false), boolPtr(false)},
+					Struct: ConfigInputStruct{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "",
+						Except:            "",
+					},
+					Field: ConfigInputField{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "",
+						Except:            "",
+					},
 				},
 			},
 			expectedFiles: []string{
@@ -102,14 +106,18 @@ func TestModelBuilderFindFiles(t *testing.T) {
 					Dir:     tempDir,
 					Include: []string{"[invalid"},
 					Exclude: []string{},
-					Struct: struct {
-						Explicit          *bool `yaml:"explicit"`
-						IncludeUnexported *bool `yaml:"include_unexported"`
-					}{boolPtr(false), boolPtr(false)},
-					Field: struct {
-						Explicit          *bool `yaml:"explicit"`
-						IncludeUnexported *bool `yaml:"include_unexported"`
-					}{boolPtr(false), boolPtr(false)},
+					Struct: ConfigInputStruct{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "",
+						Except:            "",
+					},
+					Field: ConfigInputField{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "",
+						Except:            "",
+					},
 				},
 			},
 			expectError: true,
@@ -251,6 +259,120 @@ type config struct {
 				baseConfig.Input.Struct.IncludeUnexported = boolPtr(true)
 			},
 			expectedStructs: []string{"Config", "config"},
+		},
+		{
+			name: "struct only regex - match User and Config",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Only = "^(User|Config)$"
+			},
+			expectedStructs: []string{"User", "Config"},
+		},
+		{
+			name: "struct only regex - match all starting with C",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Only = "^C.*"
+			},
+			expectedStructs: []string{"Config"},
+		},
+		{
+			name: "struct except regex - exclude User and Company",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Except = "^(User|Company)$"
+			},
+			expectedStructs: []string{"Config", "config"},
+		},
+		{
+			name: "struct except regex - exclude all starting with C",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Except = "^C.*"
+			},
+			expectedStructs: []string{"User", "config"},
+		},
+		{
+			name: "struct only and except regex - only User, exclude Config",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Only = "^(User|Config)$"
+				baseConfig.Input.Struct.Except = "^Config$"
+			},
+			expectedStructs: []string{"User"},
+		},
+		{
+			name: "field only regex - match Name and Email",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Only = "^(Name|Email)$"
+			},
+			expectedStructs: []string{"User"},
+		},
+		{
+			name: "field only regex - match all starting with N or H",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Only = "^(N|H).*"
+			},
+			expectedStructs: []string{"User", "Config", "config"},
+		},
+		{
+			name: "field except regex - exclude Age",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Except = "^Age$"
+			},
+			expectedStructs: []string{"User", "Config", "config"},
+		},
+		{
+			name: "field except regex - exclude all starting with A or P",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Except = "^(A|P).*"
+			},
+			expectedStructs: []string{"User", "Config", "config"},
+		},
+		{
+			name: "field only and except regex - only Name/Email/Host/Port, exclude Age",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Only = "^(Name|Email|Host|Port|Age)$"
+				baseConfig.Input.Field.Except = "^Age$"
+			},
+			expectedStructs: []string{"User", "Config", "config"},
+		},
+		{
+			name: "struct and field regex combined - struct only User, field only Name",
+			setConfig: func(baseConfig *Config) {
+				baseConfig.Input.Struct.Explicit = boolPtr(false)
+				baseConfig.Input.Struct.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Struct.Only = "^User$"
+				baseConfig.Input.Field.Explicit = boolPtr(false)
+				baseConfig.Input.Field.IncludeUnexported = boolPtr(false)
+				baseConfig.Input.Field.Only = "^Name$"
+			},
+			expectedStructs: []string{"User"},
 		},
 	}
 

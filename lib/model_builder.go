@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -159,6 +160,24 @@ func (s *modelBuilder) mustIncludeStruct(genDecl *ast.GenDecl, typeSpec *ast.Typ
 		!s.config.Input.Struct.isIncludeUnexported() &&
 		!ast.IsExported(typeSpec.Name.Name) {
 		return false
+	}
+
+	structName := typeSpec.Name.Name
+
+	// Check include_only (whitelist) regex pattern
+	if strings.TrimSpace(s.config.Input.Struct.Only) != "" {
+		matched, err := regexp.MatchString(s.config.Input.Struct.Only, structName)
+		if err != nil || !matched {
+			return false
+		}
+	}
+
+	// Check include_except (blacklist) regex pattern
+	if strings.TrimSpace(s.config.Input.Struct.Except) != "" {
+		matched, err := regexp.MatchString(s.config.Input.Struct.Except, structName)
+		if err == nil && matched {
+			return false
+		}
 	}
 
 	return true
@@ -401,6 +420,30 @@ func (b *modelBuilder) mustIncludeField(field *ast.Field) bool {
 	if !b.config.Input.Field.isIncludeUnexported() && len(field.Names) > 0 && !ast.IsExported(field.Names[0].Name) {
 		return false
 	}
+
+	// Skip anonymous fields for regex matching
+	if len(field.Names) == 0 {
+		return true
+	}
+
+	fieldName := field.Names[0].Name
+
+	// Check include_only (whitelist) regex pattern
+	if strings.TrimSpace(b.config.Input.Field.Only) != "" {
+		matched, err := regexp.MatchString(b.config.Input.Field.Only, fieldName)
+		if err != nil || !matched {
+			return false
+		}
+	}
+
+	// Check include_except (blacklist) regex pattern
+	if strings.TrimSpace(b.config.Input.Field.Except) != "" {
+		matched, err := regexp.MatchString(b.config.Input.Field.Except, fieldName)
+		if err == nil && matched {
+			return false
+		}
+	}
+
 	return true
 }
 
