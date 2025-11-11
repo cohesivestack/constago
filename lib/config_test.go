@@ -910,6 +910,123 @@ func TestConfigValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid regex patterns",
+			config: &Config{
+				Output: ConfigOutput{
+					FileName: "test.go",
+				},
+				Input: ConfigInput{
+					Include: []string{"**/*.go"},
+					Struct: ConfigInputStruct{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "[invalid", // invalid regex
+						Except:            "[invalid", // invalid regex
+					},
+					Field: ConfigInputField{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "[invalid", // invalid regex
+						Except:            "[invalid", // invalid regex
+					},
+				},
+			},
+			errorContains: map[string][]string{
+				"input.struct.only":   {"Only must be a valid regular expression"},
+				"input.field.only":    {"Only must be a valid regular expression"},
+				"input.struct.except": {"Except must be a valid regular expression"},
+				"input.field.except":  {"Except must be a valid regular expression"},
+			},
+		},
+		{
+			name: "valid config with regex patterns",
+			config: &Config{
+				Output: ConfigOutput{
+					FileName: "test.go",
+				},
+				Input: ConfigInput{
+					Include: []string{"**/*.go"},
+					Struct: ConfigInputStruct{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "^User$",  // valid regex
+						Except:            "^Admin$", // valid regex
+					},
+					Field: ConfigInputField{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "^(Name|Email)$", // valid regex
+						Except:            "^Age$",          // valid regex
+					},
+				},
+				Elements: []ConfigTag{
+					{
+						Name: "field",
+						Input: ConfigTagInput{
+							Mode:        InputModeTypeTagThenField,
+							TagPriority: []string{"json"},
+						},
+						Output: ConfigTagOutput{
+							Mode: OutputModeConstant,
+							Format: ConfigTagOutputFormat{
+								Holder: ConstantFormatPascal,
+								Struct: ConstantFormatPascal,
+							},
+							Transform: ConfigTagOutputTransform{
+								TagValues:      boolPtr(false),
+								ValueCase:      TransformCaseAsIs,
+								ValueSeparator: "",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "valid config with empty regex patterns",
+			config: &Config{
+				Output: ConfigOutput{
+					FileName: "test.go",
+				},
+				Input: ConfigInput{
+					Include: []string{"**/*.go"},
+					Struct: ConfigInputStruct{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "", // empty string is valid
+						Except:            "", // empty string is valid
+					},
+					Field: ConfigInputField{
+						Explicit:          boolPtr(false),
+						IncludeUnexported: boolPtr(false),
+						Only:              "", // empty string is valid
+						Except:            "", // empty string is valid
+					},
+				},
+				Elements: []ConfigTag{
+					{
+						Name: "field",
+						Input: ConfigTagInput{
+							Mode:        InputModeTypeTagThenField,
+							TagPriority: []string{"json"},
+						},
+						Output: ConfigTagOutput{
+							Mode: OutputModeConstant,
+							Format: ConfigTagOutputFormat{
+								Holder: ConstantFormatPascal,
+								Struct: ConstantFormatPascal,
+							},
+							Transform: ConfigTagOutputTransform{
+								TagValues:      boolPtr(false),
+								ValueCase:      TransformCaseAsIs,
+								ValueSeparator: "",
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "valid config with all source types",
 			config: &Config{
 				Output: ConfigOutput{

@@ -38,6 +38,8 @@ const validOutputModesErrorMessage = "\"{{value}}\" is not a valid {{title}}, mu
 
 const validNameOrTitleModesErrorMessage = "\"{{value}}\" is not a valid {{title}}, must be tag, field, or tagThenField"
 
+const validRegexErrorMessage = "{{title}} must be a valid regular expression"
+
 // ConstantFormatType
 type ConstantFormatType string
 

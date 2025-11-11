@@ -56,8 +56,10 @@ type ConfigInput struct {
 }
 
 type ConfigInputStruct struct {
-	Explicit          *bool `yaml:"explicit"`
-	IncludeUnexported *bool `yaml:"include_unexported"`
+	Explicit          *bool  `yaml:"explicit"`
+	IncludeUnexported *bool  `yaml:"include_unexported"`
+	Only              string `yaml:"only"`
+	Except            string `yaml:"except"`
 }
 
 func (c *ConfigInputStruct) isExplicit() bool {
@@ -69,8 +71,10 @@ func (c *ConfigInputStruct) isIncludeUnexported() bool {
 }
 
 type ConfigInputField struct {
-	Explicit          *bool `yaml:"explicit"`
-	IncludeUnexported *bool `yaml:"include_unexported"`
+	Explicit          *bool  `yaml:"explicit"`
+	IncludeUnexported *bool  `yaml:"include_unexported"`
+	Only              string `yaml:"only"`
+	Except            string `yaml:"except"`
 }
 
 func (c *ConfigInputField) isExplicit() bool {
@@ -93,6 +97,8 @@ func (c *ConfigInput) validate() *v.Validation {
 			v.Is(
 				v.BoolP(c.Struct.Explicit, "explicit").Not().Nil(),
 				v.BoolP(c.Struct.IncludeUnexported, "include_unexported").Not().Nil(),
+				v.String(c.Struct.Only, "only").Blank().Or().Passing(isValidRegex, validRegexErrorMessage),
+				v.String(c.Struct.Except, "except").Blank().Or().Passing(isValidRegex, validRegexErrorMessage),
 			),
 		).
 		Do(func(val *v.Validation) {
@@ -103,6 +109,8 @@ func (c *ConfigInput) validate() *v.Validation {
 			v.Is(
 				v.BoolP(c.Field.Explicit, "explicit").Not().Nil(),
 				v.BoolP(c.Field.IncludeUnexported, "include_unexported").Not().Nil(),
+				v.String(c.Field.Only, "only").Blank().Or().Passing(isValidRegex, validRegexErrorMessage),
+				v.String(c.Field.Except, "except").Blank().Or().Passing(isValidRegex, validRegexErrorMessage),
 			),
 		)
 }
