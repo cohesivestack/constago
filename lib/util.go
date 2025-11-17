@@ -1,11 +1,9 @@
 package constago
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"golang.org/x/text/cases"
@@ -153,22 +151,6 @@ func isValidSource(pattern string) bool {
 	return true
 }
 
-func isValidDir(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
-}
-
 func isStringBlank[T ~string](s T) bool {
 	return len(strings.TrimSpace(string(s))) == 0
-}
-
-func uppercaseFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	_, size := utf8.DecodeRuneInString(s)       // first rune and its byte size
-	return strings.ToUpper(s[:size]) + s[size:] // uppercase just the first rune
 }
