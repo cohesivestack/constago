@@ -25,20 +25,19 @@ func main() {
 }
 
 // loadConfigFromViper builds a Config using the given viper instance,
-// applies your defaults and validations via NewConfig, and returns it.
-// It respects your `yaml` struct tags when unmarshalling.
+// applies the defaults and validations via NewConfig, and returns it.
+// It respects the `yaml` struct tags when unmarshalling.
 func loadConfigFromViper(v *viper.Viper) (*constago.Config, error) {
 	raw := &constago.Config{}
 
-	// Use yaml tags to decode into your structs.
+	// Use yaml tags to decode into the structs.
 	if err := v.Unmarshal(raw, func(dc *mapstructure.DecoderConfig) {
 		dc.TagName = "yaml"
-		// dc.WeaklyTypedInput = true // enable if you prefer lenient coercions
 	}); err != nil {
 		return nil, fmt.Errorf("unable to decode configuration: %w", err)
 	}
 
-	// Pass through your normal constructor (defaults + validate)
+	// Pass through the normal constructor (defaults + validate)
 	cfg, err := constago.NewConfig(raw)
 	if err != nil {
 		return nil, err
@@ -132,7 +131,7 @@ func applyChangedFlagsToViper(cmd *cobra.Command, v *viper.Viper) error {
 	return nil
 }
 
-// newRootCmd creates the Cobra CLI, wires Viper, merges sources, and runs your callback.
+// newRootCmd creates the Cobra CLI, wires Viper, merges sources, and runs a callback.
 func newRootCmd(run func(*constago.Config) error) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "constago",
