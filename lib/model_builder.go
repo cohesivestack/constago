@@ -652,6 +652,12 @@ func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, pac
 		}
 	}
 
+	extraPkgs := b.collectTypePackages(field.Type, importIndex, moduleDir)
+	if len(extraPkgs) == 0 && strings.Contains(typeName, ".") {
+		extraPkgs = b.collectTypePackagesFromTypeName(typeName, importIndex, moduleDir)
+	}
+	extraPkgs = filterExtraTypePackages(extraPkgs, pkg)
+
 	valueOutput := &ValueOutput{
 		FieldName: fieldName,
 		TypeName:  typeName,
@@ -665,6 +671,12 @@ func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, pac
 			}
 			// For unqualified/basic types, associate with current package
 			return &TypePackageOutput{Path: "", Name: packageName}
+		}(),
+		ExtraTypePackages: func() []*TypePackageOutput {
+			if len(extraPkgs) == 0 {
+				return nil
+			}
+			return extraPkgs
 		}(),
 	}
 
@@ -774,6 +786,128 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 		return fmt.Sprintf("%s[%s]", baseType, strings.Join(indexTypes, ", ")), basePkg
 	}
 	return "", nil
+}
+
+func (b *modelBuilder) collectTypePackages(expr ast.Expr, importIndex map[string]*TypePackageOutput, moduleDir string) []*TypePackageOutput {
+	switch t := expr.(type) {
+	case *ast.SelectorExpr:
+		ident, ok := t.X.(*ast.Ident)
+		if !ok {
+			return nil
+		}
+		if pkg := b.resolvePackageForIdent(ident.Name, importIndex, moduleDir); pkg != nil {
+			return []*TypePackageOutput{pkg}
+		}
+		return nil
+	case *ast.ArrayType:
+		return b.collectTypePackages(t.Elt, importIndex, moduleDir)
+	case *ast.MapType:
+		pkgs := b.collectTypePackages(t.Key, importIndex, moduleDir)
+		return append(pkgs, b.collectTypePackages(t.Value, importIndex, moduleDir)...)
+	case *ast.StarExpr:
+		return b.collectTypePackages(t.X, importIndex, moduleDir)
+	case *ast.ChanType:
+		return b.collectTypePackages(t.Value, importIndex, moduleDir)
+	case *ast.IndexExpr:
+		pkgs := b.collectTypePackages(t.X, importIndex, moduleDir)
+		return append(pkgs, b.collectTypePackages(t.Index, importIndex, moduleDir)...)
+	case *ast.IndexListExpr:
+		pkgs := b.collectTypePackages(t.X, importIndex, moduleDir)
+		for _, index := range t.Indices {
+			pkgs = append(pkgs, b.collectTypePackages(index, importIndex, moduleDir)...)
+		}
+		return pkgs
+	default:
+		return nil
+	}
+}
+
+func (b *modelBuilder) collectTypePackagesFromTypeName(typeName string, importIndex map[string]*TypePackageOutput, moduleDir string) []*TypePackageOutput {
+	if typeName == "" {
+		return nil
+	}
+	re := regexp.MustCompile(`\b([A-Za-z_]\w*)\.`)
+	matches := re.FindAllStringSubmatch(typeName, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	var pkgs []*TypePackageOutput
+	for _, m := range matches {
+		if len(m) < 2 {
+			continue
+		}
+		if pkg := b.resolvePackageForIdent(m[1], importIndex, moduleDir); pkg != nil {
+			pkgs = append(pkgs, pkg)
+		}
+	}
+	return pkgs
+}
+
+func (b *modelBuilder) resolvePackageForIdent(identName string, importIndex map[string]*TypePackageOutput, moduleDir string) *TypePackageOutput {
+	if imp, ok := importIndex[identName]; ok && imp != nil {
+		return b.normalizeImportPackage(imp, moduleDir)
+	}
+	var best *TypePackageOutput
+	for _, imp := range importIndex {
+		if imp != nil && imp.Name == identName {
+			if imp.Path != "" {
+				return b.normalizeImportPackage(imp, moduleDir)
+			}
+			if best == nil {
+				best = imp
+			}
+		}
+	}
+	if best != nil {
+		return b.normalizeImportPackage(best, moduleDir)
+	}
+	for _, imp := range importIndex {
+		if imp != nil && imp.Path != "" && importPathHasSegment(imp.Path, identName) {
+			return b.normalizeImportPackage(imp, moduleDir)
+		}
+	}
+	return nil
+}
+
+func (b *modelBuilder) normalizeImportPackage(imp *TypePackageOutput, moduleDir string) *TypePackageOutput {
+	if imp == nil {
+		return nil
+	}
+	name := imp.Name
+	if strings.Contains(name, ".") {
+		if realPkgName := b.getPackageNameFromGoList(imp.Path, moduleDir); realPkgName != "" {
+			name = realPkgName
+		} else if strings.HasPrefix(imp.Path, "gopkg.in/") {
+			parts := strings.Split(strings.TrimPrefix(imp.Path, "gopkg.in/"), ".")
+			if len(parts) > 0 {
+				name = parts[0]
+			}
+		}
+	}
+	return &TypePackageOutput{Path: imp.Path, Name: name, Alias: imp.Alias}
+}
+
+func filterExtraTypePackages(pkgs []*TypePackageOutput, primary *TypePackageOutput) []*TypePackageOutput {
+	var primaryPath string
+	if primary != nil {
+		primaryPath = primary.Path
+	}
+	seen := map[string]bool{}
+	var out []*TypePackageOutput
+	for _, pkg := range pkgs {
+		if pkg == nil || pkg.Path == "" {
+			continue
+		}
+		if pkg.Path == primaryPath {
+			continue
+		}
+		if seen[pkg.Path] {
+			continue
+		}
+		seen[pkg.Path] = true
+		out = append(out, pkg)
+	}
+	return out
 }
 
 // buildImportIndex indexes file imports by the identifier used in code (alias or default name)

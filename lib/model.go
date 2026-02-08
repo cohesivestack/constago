@@ -56,9 +56,10 @@ type NoneOutput struct {
 }
 
 type ValueOutput struct {
-	FieldName   string
-	TypeName    string
-	TypePackage *TypePackageOutput
+	FieldName          string
+	TypeName           string
+	TypePackage        *TypePackageOutput
+	ExtraTypePackages  []*TypePackageOutput
 }
 
 type TypePackageOutput struct {
@@ -126,12 +127,22 @@ func (m *Model) AddStruct(packagePath string, packageName string, structModel *S
 		}
 	}
 
+	addImport := func(imp *TypePackageOutput) {
+		if imp == nil || imp.Path == "" {
+			return
+		}
+		if _, exists := pkg.Imports[imp.Path]; !exists {
+			pkg.Imports[imp.Path] = imp
+			setRecursiveAlias(pkg, imp, imp.Name, 0)
+		}
+	}
+
 	for _, g := range structModel.Getters {
 		for _, r := range g.Returns {
 			if r.Value != nil {
-				if _, exists := pkg.Imports[r.Value.TypePackage.Path]; !exists {
-					pkg.Imports[r.Value.TypePackage.Path] = r.Value.TypePackage
-					setRecursiveAlias(pkg, r.Value.TypePackage, r.Value.TypePackage.Name, 0)
+				addImport(r.Value.TypePackage)
+				for _, extra := range r.Value.ExtraTypePackages {
+					addImport(extra)
 				}
 			}
 		}

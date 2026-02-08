@@ -1705,6 +1705,66 @@ type Admin struct {
 	}
 }
 
+func TestModelBuilderGenericTypeImports(t *testing.T) {
+	tempDir := t.TempDir()
+
+	goMod := "module github.com/example\n\ngo 1.22\n"
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "go.mod"), []byte(goMod), 0644))
+
+	nullDir := filepath.Join(tempDir, "null")
+	require.NoError(t, os.MkdirAll(nullDir, 0755))
+	nullSrc := "package null\n\ntype Val[T any] struct{}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(nullDir, "null.go"), []byte(nullSrc), 0644))
+
+	typesDir := filepath.Join(tempDir, "types")
+	require.NoError(t, os.MkdirAll(typesDir, 0755))
+	typesSrc := "package types\n\ntype JSON[T any] struct{}\n"
+	require.NoError(t, os.WriteFile(filepath.Join(typesDir, "types.go"), []byte(typesSrc), 0644))
+
+	testFile := filepath.Join(tempDir, "event.go")
+	content := `package main
+
+import (
+	"encoding/json"
+	"github.com/example/null"
+	"github.com/example/types"
+)
+
+type MonitorEvent struct {
+	Detail null.Val[types.JSON[json.RawMessage]] ` + "`db:\"detail\"`" + `
+}
+`
+	require.NoError(t, os.WriteFile(testFile, []byte(content), 0644))
+
+	cfg, err := NewConfig(&Config{
+		Input: ConfigInput{
+			Dir: tempDir,
+		},
+		Getters: []ConfigGetter{
+			{
+				Name:    "Val",
+				Returns: []string{":value"},
+				Output: ConfigGetterOutput{
+					Format: ConstantFormatPascal,
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	builder := NewModelBuilder(cfg)
+	model, err := builder.Build()
+	require.NoError(t, err)
+
+	packagePath := filepath.ToSlash(tempDir)
+	pkg := model.Packages[packagePath]
+	require.NotNil(t, pkg)
+
+	assert.Contains(t, pkg.Imports, "github.com/example/null")
+	assert.Contains(t, pkg.Imports, "github.com/example/types")
+	assert.Contains(t, pkg.Imports, "encoding/json")
+}
+
 func TestModelBuilderBuildConstantsWithTransform(t *testing.T) {
 	tempDir := t.TempDir()
 
