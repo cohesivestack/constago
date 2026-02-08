@@ -502,23 +502,21 @@ func (b *modelBuilder) mustIncludeField(field *ast.Field) bool {
 // computeElementValue computes element value considering mode, tag priority and transforms
 func (b *modelBuilder) computeElementValue(fieldName string, tagText string, el *ConfigTag) string {
 	// helper: pick first non-empty tag value by priority
-	getFromTags := func() (string, bool) {
-		if tagText == "" {
-			return "", false
-		}
+	// returns: (value, fromFieldName, ok)
+	getFromTags := func() (string, bool, bool) {
 		tags := parseStructTags(tagText)
 		for _, key := range el.Input.TagPriority {
 			if key == ":field" {
 				// special pseudo-tag: refers to field name
-				return fieldName, true
+				return fieldName, true, true
 			}
 			if v, ok := lookupTag(tags, key); ok {
 				// Use the value up to first comma (e.g., json:"name,omitempty")
 				parts := strings.SplitN(v, ",", 2)
-				return parts[0], true
+				return parts[0], false, true
 			}
 		}
-		return "", false
+		return "", false, false
 	}
 
 	applyTransform := func(s string, cfg *ConfigTag) string {
@@ -528,7 +526,10 @@ func (b *modelBuilder) computeElementValue(fieldName string, tagText string, el 
 
 	switch el.Input.Mode {
 	case InputModeTypeTag:
-		if v, ok := getFromTags(); ok {
+		if v, fromField, ok := getFromTags(); ok {
+			if fromField {
+				return applyTransform(fieldName, el)
+			}
 			if el.Output.Transform.TagValues != nil && *el.Output.Transform.TagValues {
 				return applyTransform(v, el)
 			}
@@ -538,7 +539,10 @@ func (b *modelBuilder) computeElementValue(fieldName string, tagText string, el 
 	case InputModeTypeField:
 		return applyTransform(fieldName, el)
 	case InputModeTypeTagThenField:
-		if v, ok := getFromTags(); ok {
+		if v, fromField, ok := getFromTags(); ok {
+			if fromField {
+				return applyTransform(fieldName, el)
+			}
 			if el.Output.Transform.TagValues != nil && *el.Output.Transform.TagValues {
 				return applyTransform(v, el)
 			}
