@@ -241,6 +241,7 @@ func TestConfigSetDefaults(t *testing.T) {
 			name:   "empty config sets all defaults",
 			config: &Config{},
 			expected: &Config{
+				Verbose: intPtr(1),
 				Input: ConfigInput{
 					Dir:     ".",
 					Include: []string{"**/*.go"},
@@ -285,6 +286,7 @@ func TestConfigSetDefaults(t *testing.T) {
 				},
 			},
 			expected: &Config{
+				Verbose: intPtr(1),
 				Output: ConfigOutput{
 					FileName: "custom.go", // preserved
 				},
@@ -341,6 +343,11 @@ func TestConfigSetDefaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.config.setDefaults()
+
+			// Check root defaults
+			if assert.NotNil(t, tt.expected.Verbose) && assert.NotNil(t, tt.config.Verbose) {
+				assert.Equal(t, *tt.expected.Verbose, *tt.config.Verbose)
+			}
 
 			// Check input defaults
 			assert.Equal(t, tt.expected.Input.Dir, tt.config.Input.Dir)

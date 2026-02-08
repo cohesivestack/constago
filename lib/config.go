@@ -12,6 +12,7 @@ import (
 
 // Config represents the main configuration structure for the Constago generator
 type Config struct {
+	Verbose *int `yaml:"verbose"`
 	Input    ConfigInput    `yaml:"input"`
 	Output   ConfigOutput   `yaml:"output"`
 	Elements []ConfigTag    `yaml:"elements"`
@@ -20,6 +21,7 @@ type Config struct {
 
 func (c *Config) validate() error {
 	val := v.
+		Is(v.String(fmt.Sprintf("%d", c.verboseLevel()), "verbose").InSlice([]string{"0", "1", "2"}, "{{title}} must be 0, 1, or 2")).
 		In("input", c.Input.validate()).
 		In("output", c.Output.validate()).
 		Do(func(val *v.Validation) {
@@ -42,6 +44,13 @@ func (c *Config) validate() error {
 		return nil
 	}
 	return val.ToValgoError()
+}
+
+func (c *Config) verboseLevel() int {
+	if c == nil || c.Verbose == nil {
+		return 1
+	}
+	return *c.Verbose
 }
 
 // config.input
@@ -274,6 +283,11 @@ func NewConfig(config *Config) (*Config, error) {
 
 // setDefaults sets default values for configuration fields
 func (config *Config) setDefaults() {
+	// Root defaults
+	if config.Verbose == nil {
+		config.Verbose = intPtr(1)
+	}
+
 	// Input defaults
 	if isStringBlank(config.Input.Dir) {
 		config.Input.Dir = "."

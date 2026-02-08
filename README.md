@@ -108,6 +108,8 @@ func (_struct *User) VName() (string, string, string) {
 ## Config File
 
 ```yaml
+verbose: 1 # 0=silent, 1=verbose steps (default), 2=steps + scanned/generated elements
+
 input:
   dir: "." # Default "."
   include: # Where to scan for structs (supports globs and package:NAME). Default "**/*.go"

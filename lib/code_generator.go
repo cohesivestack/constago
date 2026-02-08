@@ -23,6 +23,10 @@ func Generate(config *Config) error {
 		return fmt.Errorf("failed to create config: %w", err)
 	}
 
+	logger := newRunLogger(cfg)
+	logger.Start()
+	logger.Step("Building model")
+
 	// Build the model using the model builder
 	builder := NewModelBuilder(cfg)
 	model, err := builder.Build()
@@ -39,9 +43,20 @@ func Generate(config *Config) error {
 	}
 
 	// Generate code for each package
+	logger.Step("Generating output for %d package(s)", len(g.model.Packages))
 	for _, pkg := range g.model.Packages {
 		if len(pkg.Structs) == 0 {
 			continue // Skip packages with no structs to generate
+		}
+
+		logger.Step("Generating %s (%d struct(s))", pkg.Path, len(pkg.Structs))
+		if logger.enabled(2) {
+			for _, s := range pkg.Structs {
+				logger.Detail(
+					"%s: %d constant(s), %d struct(s), %d getter(s)",
+					s.Name, len(s.Constants), len(s.Structs), len(s.Getters),
+				)
+			}
 		}
 
 		// Create output directory if it doesn't exist
@@ -70,6 +85,8 @@ func Generate(config *Config) error {
 		if err != nil {
 			return fmt.Errorf("failed to execute template for %s: %w", fileName, err)
 		}
+
+		logger.Step("Wrote %s", fileName)
 	}
 
 	return nil

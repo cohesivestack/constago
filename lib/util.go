@@ -108,6 +108,10 @@ func boolPtr(b bool) *bool {
 	return &b
 }
 
+func intPtr(i int) *int {
+	return &i
+}
+
 // isValidGoIdentifier checks if a string is a valid Go identifier
 func isValidGoIdentifier(s string) bool {
 	if len(s) == 0 {

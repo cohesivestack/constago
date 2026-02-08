@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+
 	if err := newRootCmd(func(cfg *constago.Config) error {
 		err := constago.Generate(cfg)
 		if err != nil {
@@ -160,6 +161,7 @@ func newRootCmd(run func(*constago.Config) error) *cobra.Command {
 
 	// Global
 	cmd.Flags().String("config", "", "Path to YAML config file")
+	cmd.Flags().Int("verbose", 1, "Verbosity level: 0=silent, 1=steps, 2=steps+elements")
 
 	// ---------- INPUT ----------
 	cmd.Flags().String("input.dir", "", "Directory to scan (e.g., ./)")

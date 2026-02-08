@@ -20,6 +20,7 @@ import (
 type modelBuilder struct {
 	config *Config
 	model  *Model
+	logger *runLogger
 
 	// Caches (per run; constago is single-threaded today)
 	goListPkgNameCache     map[string]string // key: moduleDir+"\n"+importPath
@@ -35,11 +36,20 @@ const maxInternalCacheEntries = 4096
 // BuildModel builds and returns a populated Model for the given config
 func (b *modelBuilder) Build() (*Model, error) {
 
+	if b.logger == nil {
+		b.logger = newRunLogger(b.config)
+	}
+
+	b.logger.Step("Scanning inputs")
 	err := b.scanFiles()
 	if err != nil {
 		return nil, err
 	}
 
+	b.logger.Step(
+		"Scan complete: %d file(s), %d package(s), %d struct(s)",
+		b.model.FilesScanned, b.model.PackagesFound, b.model.StructsFound,
+	)
 	return b.model, nil
 }
 
@@ -47,6 +57,7 @@ func NewModelBuilder(config *Config) *modelBuilder {
 	return &modelBuilder{
 		config: config,
 		model:  NewModel(config),
+		logger: newRunLogger(config),
 
 		goListPkgNameCache:     map[string]string{},
 		importPathPkgNameCache: map[string]string{},
@@ -101,7 +112,9 @@ func (b *modelBuilder) scanFiles() error {
 		return err
 	}
 
+	b.logger.Step("Found %d file(s) to scan", len(files))
 	for _, file := range files {
+		b.logger.Detail("Scan file %s", file)
 		if err := b.scanFile(file); err != nil {
 			return err
 		}
@@ -272,12 +285,22 @@ func (b *modelBuilder) scanFile(filePath string) error {
 				continue
 			}
 
-			if !b.mustIncludeStruct(genDecl, typeSpec, fset, filePath) {
+			structName := typeSpec.Name.Name
+			includeStruct := b.mustIncludeStruct(genDecl, typeSpec, fset, filePath)
+			if b.logger.enabled(2) {
+				if includeStruct {
+					b.logger.Detail("Struct %s (included)", structName)
+				} else {
+					b.logger.Detail("Struct %s (skipped)", structName)
+				}
+			}
+
+			if !includeStruct {
 				continue
 			}
 
 			structModel := &StructModel{
-				Name:       typeSpec.Name.Name,
+				Name:       structName,
 				File:       filePath,
 				LineNumber: fset.Position(typeSpec.Pos()).Line,
 				Constants:  []*ConstantOutput{},
@@ -300,7 +323,9 @@ func (b *modelBuilder) scanFile(filePath string) error {
 				if len(field.Names) == 0 {
 					continue
 				}
-				if !b.mustIncludeField(field) {
+
+				includeField := b.mustIncludeField(field)
+				if !includeField {
 					continue
 				}
 
@@ -397,7 +422,15 @@ func (b *modelBuilder) scanFile(filePath string) error {
 				}
 			}
 			if len(structModel.Constants) > 0 || len(structModel.Structs) > 0 || len(structModel.Getters) > 0 {
+				if b.logger.enabled(2) {
+					b.logger.Detail(
+						"Generated %s: %d constant(s), %d struct(s), %d getter(s)",
+						structModel.Name, len(structModel.Constants), len(structModel.Structs), len(structModel.Getters),
+					)
+				}
 				b.model.AddStruct(packagePath, packageName, structModel)
+			} else if b.logger.enabled(2) {
+				b.logger.Detail("Generated %s: <none>", structModel.Name)
 			}
 		}
 		return true

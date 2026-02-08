@@ -21,6 +21,7 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 	tmp := t.TempDir()
 
 	args := []string{
+		"--verbose", "2",
 		"--input.dir", tmp,
 		"--input.include", "**/*.go",
 		"--input.exclude", "**/*_test.go",
@@ -41,6 +42,9 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 	require.NotNil(t, captured)
 
 	// Validate the captured config reflects flags + defaults
+	if assert.NotNil(t, captured.Verbose) {
+		assert.Equal(t, 2, *captured.Verbose)
+	}
 	assert.Equal(t, tmp, captured.Input.Dir)
 	assert.ElementsMatch(t, []string{"**/*.go"}, captured.Input.Include)
 	assert.ElementsMatch(t, []string{"**/*_test.go"}, captured.Input.Exclude)
