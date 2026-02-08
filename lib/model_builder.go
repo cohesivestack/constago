@@ -20,7 +20,17 @@ import (
 type modelBuilder struct {
 	config *Config
 	model  *Model
+
+	// Caches (per run; constago is single-threaded today)
+	goListPkgNameCache     map[string]string // key: moduleDir+"\n"+importPath
+	importPathPkgNameCache map[string]string // key: importPath
+	goModuleCache          map[string]struct {
+		moduleDir  string
+		modulePath string
+	} // key: starting directory
 }
+
+const maxInternalCacheEntries = 4096
 
 // BuildModel builds and returns a populated Model for the given config
 func (b *modelBuilder) Build() (*Model, error) {
@@ -34,7 +44,17 @@ func (b *modelBuilder) Build() (*Model, error) {
 }
 
 func NewModelBuilder(config *Config) *modelBuilder {
-	return &modelBuilder{config: config, model: NewModel(config)}
+	return &modelBuilder{
+		config: config,
+		model:  NewModel(config),
+
+		goListPkgNameCache:     map[string]string{},
+		importPathPkgNameCache: map[string]string{},
+		goModuleCache: map[string]struct {
+			moduleDir  string
+			modulePath string
+		}{},
+	}
 }
 
 // findFiles resolves include/exclude patterns into a set of Go files
@@ -234,8 +254,7 @@ func (b *modelBuilder) scanFile(filePath string) error {
 	packagePath := b.extractPackagePath(filePath)
 	packageName := node.Name.Name
 	// Build import index for resolving selector types to full import info
-	importIndex, modulePath := b.buildImportIndex(node, filePath)
-	moduleDir, _ := locateGoModule(filePath)
+	importIndex, moduleDir, modulePath := b.buildImportIndex(node, filePath)
 
 	// Aggregations are per-struct, so they will be initialized inside the struct loop
 	ast.Inspect(node, func(n ast.Node) bool {
@@ -610,7 +629,7 @@ func (b *modelBuilder) createValueOutput(field *ast.Field, fieldName string, pac
 							name := imp.Name
 							if strings.Contains(name, ".") {
 								// The name looks like an identifier (e.g., "yaml.v3"), try to get the real package name
-								if realPkgName := getPackageNameFromGoList(imp.Path, moduleDir); realPkgName != "" {
+								if realPkgName := b.getPackageNameFromGoList(imp.Path, moduleDir); realPkgName != "" {
 									name = realPkgName
 								} else {
 									// Fallback: for patterns like gopkg.in/yaml.v3, the package name is usually the part before the dot
@@ -758,10 +777,10 @@ func (b *modelBuilder) extractTypeInfo(expr ast.Expr, importIndex map[string]*Ty
 }
 
 // buildImportIndex indexes file imports by the identifier used in code (alias or default name)
-func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) (map[string]*TypePackageOutput, string) {
+func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) (map[string]*TypePackageOutput, string, string) {
 	idx := make(map[string]*TypePackageOutput)
 	// Try to locate module directory and module path (from go.mod)
-	moduleDir, modulePath := locateGoModule(currentFilePath)
+	moduleDir, modulePath := b.locateGoModule(currentFilePath)
 	for _, imp := range node.Imports {
 		path := strings.Trim(imp.Path.Value, "\"")
 
@@ -808,9 +827,9 @@ func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) 
 		} else {
 			// External package - use go list to get the actual package name
 			// This is the most reliable way to get the package name
-			if pkgName := getPackageNameFromGoList(path, moduleDir); pkgName != "" {
+			if pkgName := b.getPackageNameFromGoList(path, moduleDir); pkgName != "" {
 				realName = pkgName
-			} else if pkgName := readPackageNameFromImportPath(path); pkgName != "" {
+			} else if pkgName := b.readPackageNameFromImportPath(path); pkgName != "" {
 				// Fallback: try to read from module cache
 				realName = pkgName
 			}
@@ -828,26 +847,75 @@ func (b *modelBuilder) buildImportIndex(node *ast.File, currentFilePath string) 
 			}
 		}
 	}
-	return idx, modulePath
+	return idx, moduleDir, modulePath
 }
 
 // locateGoModule walks up from the current file to find a go.mod and returns (moduleDir, modulePath)
-func locateGoModule(currentFilePath string) (string, string) {
-	dir := filepath.Dir(currentFilePath)
+func (b *modelBuilder) locateGoModule(currentFilePath string) (string, string) {
+	abs, err := filepath.Abs(currentFilePath)
+	if err != nil {
+		abs = currentFilePath
+	}
+	dir := filepath.Dir(abs)
+
+	// Hot path: module lookup is called per-file; cache by starting directory.
+	if v, ok := b.goModuleCache[dir]; ok {
+		return v.moduleDir, v.modulePath
+	}
+
+	var visited []string
 	for {
+		visited = append(visited, dir)
 		goModPath := filepath.Join(dir, "go.mod")
 		if _, err := os.Stat(goModPath); err == nil {
 			// Read module path
 			data, err := os.ReadFile(goModPath)
 			if err != nil {
+				if len(b.goModuleCache) > maxInternalCacheEntries {
+					b.goModuleCache = map[string]struct {
+						moduleDir  string
+						modulePath string
+					}{}
+				}
+				for _, d := range visited {
+					b.goModuleCache[d] = struct {
+						moduleDir  string
+						modulePath string
+					}{moduleDir: dir, modulePath: ""}
+				}
 				return dir, ""
 			}
 			lines := strings.Split(string(data), "\n")
 			for _, l := range lines {
 				l = strings.TrimSpace(l)
 				if strings.HasPrefix(l, "module ") {
-					return dir, strings.TrimSpace(strings.TrimPrefix(l, "module "))
+					modulePath := strings.TrimSpace(strings.TrimPrefix(l, "module "))
+					if len(b.goModuleCache) > maxInternalCacheEntries {
+						b.goModuleCache = map[string]struct {
+							moduleDir  string
+							modulePath string
+						}{}
+					}
+					for _, d := range visited {
+						b.goModuleCache[d] = struct {
+							moduleDir  string
+							modulePath string
+						}{moduleDir: dir, modulePath: modulePath}
+					}
+					return dir, modulePath
 				}
+			}
+			if len(b.goModuleCache) > maxInternalCacheEntries {
+				b.goModuleCache = map[string]struct {
+					moduleDir  string
+					modulePath string
+				}{}
+			}
+			for _, d := range visited {
+				b.goModuleCache[d] = struct {
+					moduleDir  string
+					modulePath string
+				}{moduleDir: dir, modulePath: ""}
 			}
 			return dir, ""
 		}
@@ -856,6 +924,18 @@ func locateGoModule(currentFilePath string) (string, string) {
 			break
 		}
 		dir = parent
+	}
+	if len(b.goModuleCache) > maxInternalCacheEntries {
+		b.goModuleCache = map[string]struct {
+			moduleDir  string
+			modulePath string
+		}{}
+	}
+	for _, d := range visited {
+		b.goModuleCache[d] = struct {
+			moduleDir  string
+			modulePath string
+		}{moduleDir: "", modulePath: ""}
 	}
 	return "", ""
 }
@@ -887,6 +967,29 @@ func readPackageName(dir string) string {
 	return ""
 }
 
+func isLikelyStdLibImportPath(importPath string) bool {
+	if importPath == "" {
+		return false
+	}
+	first := importPath
+	if i := strings.IndexByte(importPath, '/'); i >= 0 {
+		first = importPath[:i]
+	}
+	// In module mode, almost all third-party module paths include a dot in the first segment (e.g. github.com, golang.org).
+	// Standard library packages do not.
+	return !strings.Contains(first, ".")
+}
+
+func lastPathSegment(p string) string {
+	if p == "" {
+		return ""
+	}
+	if i := strings.LastIndexByte(p, '/'); i >= 0 && i+1 < len(p) {
+		return p[i+1:]
+	}
+	return p
+}
+
 // importPathHasSegment returns true if the import path contains the given segment as a path element
 func importPathHasSegment(path string, seg string) bool {
 	if seg == "" {
@@ -903,7 +1006,18 @@ func importPathHasSegment(path string, seg string) bool {
 
 // getPackageNameFromGoList uses `go list` to get the actual package name for an import path.
 // This is the most reliable way to get the package name for external packages.
-func getPackageNameFromGoList(importPath string, moduleDir string) string {
+func (b *modelBuilder) getPackageNameFromGoList(importPath string, moduleDir string) string {
+	// Avoid spawning `go` for standard library packages; name is the last path segment.
+	// Example: "net/http" -> "http".
+	if isLikelyStdLibImportPath(importPath) {
+		return lastPathSegment(importPath)
+	}
+
+	key := moduleDir + "\n" + importPath
+	if v, ok := b.goListPkgNameCache[key]; ok {
+		return v
+	}
+
 	// Use go list to get the package name
 	// This works for any import path, including versioned modules
 	cmd := exec.Command("go", "list", "-f", "{{.Name}}", importPath)
@@ -912,19 +1026,37 @@ func getPackageNameFromGoList(importPath string, moduleDir string) string {
 	}
 	output, err := cmd.Output()
 	if err != nil {
+		if len(b.goListPkgNameCache) > maxInternalCacheEntries {
+			b.goListPkgNameCache = map[string]string{}
+		}
+		b.goListPkgNameCache[key] = ""
 		return ""
 	}
 	name := strings.TrimSpace(string(output))
 	if name != "" && name != "main" {
+		if len(b.goListPkgNameCache) > maxInternalCacheEntries {
+			b.goListPkgNameCache = map[string]string{}
+		}
+		b.goListPkgNameCache[key] = name
 		return name
 	}
+
+	// Cache negative results too; callers still have fallbacks (module cache / heuristics).
+	if len(b.goListPkgNameCache) > maxInternalCacheEntries {
+		b.goListPkgNameCache = map[string]string{}
+	}
+	b.goListPkgNameCache[key] = ""
 	return ""
 }
 
 // readPackageNameFromImportPath attempts to read the actual package name from an external import path
 // by looking in the Go module cache. Returns empty string if not found or not accessible.
 // This is a fallback when go list is not available or fails.
-func readPackageNameFromImportPath(importPath string) string {
+func (b *modelBuilder) readPackageNameFromImportPath(importPath string) string {
+	if v, ok := b.importPathPkgNameCache[importPath]; ok {
+		return v
+	}
+
 	// Try to find the package in GOPATH/pkg/mod or GOMODCACHE
 	// This is a best-effort approach
 	gopath := os.Getenv("GOPATH")
@@ -983,10 +1115,18 @@ func readPackageNameFromImportPath(importPath string) string {
 						moduleDir := filepath.Join(parentDir, entryName)
 						versionedPath := filepath.Join(moduleDir, lastSegment)
 						if name := readPackageName(versionedPath); name != "" {
+							if len(b.importPathPkgNameCache) > maxInternalCacheEntries {
+								b.importPathPkgNameCache = map[string]string{}
+							}
+							b.importPathPkgNameCache[importPath] = name
 							return name
 						}
 						// Also try the module root in case the package is at the root
 						if name := readPackageName(moduleDir); name != "" {
+							if len(b.importPathPkgNameCache) > maxInternalCacheEntries {
+								b.importPathPkgNameCache = map[string]string{}
+							}
+							b.importPathPkgNameCache[importPath] = name
 							return name
 						}
 					}
@@ -997,9 +1137,17 @@ func readPackageNameFromImportPath(importPath string) string {
 		// Fallback: try the import path directly (for non-versioned or different structures)
 		pkgPath := filepath.Join(basePath, filepath.FromSlash(importPath))
 		if name := readPackageName(pkgPath); name != "" {
+			if len(b.importPathPkgNameCache) > maxInternalCacheEntries {
+				b.importPathPkgNameCache = map[string]string{}
+			}
+			b.importPathPkgNameCache[importPath] = name
 			return name
 		}
 	}
 
+	if len(b.importPathPkgNameCache) > maxInternalCacheEntries {
+		b.importPathPkgNameCache = map[string]string{}
+	}
+	b.importPathPkgNameCache[importPath] = ""
 	return ""
 }
