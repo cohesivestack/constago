@@ -27,12 +27,12 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 		"--input.exclude", "**/*_test.go",
 		"--input.struct.explicit", "true",
 		"--input.struct.include_unexported", "true",
-		"--input.struct.include_only", "",
-		"--input.struct.include_except", "",
+		"--input.struct.only", "",
+		"--input.struct.except", "",
 		"--input.field.explicit", "true",
 		"--input.field.include_unexported", "true",
-		"--input.field.include_only", "",
-		"--input.field.include_except", "",
+		"--input.field.only", "",
+		"--input.field.except", "",
 		"--output.file_name", "gen_out.go",
 	}
 	cmd.SetArgs(args)
@@ -56,6 +56,8 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 	if assert.NotNil(t, captured.Input.Struct.IncludeUnexported) {
 		assert.True(t, *captured.Input.Struct.IncludeUnexported)
 	}
+	assert.Equal(t, "", captured.Input.Struct.Only)
+	assert.Equal(t, "", captured.Input.Struct.Except)
 
 	// Field flags
 	if assert.NotNil(t, captured.Input.Field.Explicit) {
@@ -64,6 +66,8 @@ func TestNewRootCmd_ConfigFlagsApplied(t *testing.T) {
 	if assert.NotNil(t, captured.Input.Field.IncludeUnexported) {
 		assert.True(t, *captured.Input.Field.IncludeUnexported)
 	}
+	assert.Equal(t, "", captured.Input.Field.Only)
+	assert.Equal(t, "", captured.Input.Field.Except)
 
 	assert.Equal(t, "gen_out.go", captured.Output.FileName)
 }
