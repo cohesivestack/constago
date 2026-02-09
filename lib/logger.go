@@ -36,8 +36,8 @@ func (rl *runLogger) Start() {
 	if !rl.enabled(1) {
 		return
 	}
-	rl.l.Println("----------------------------------------")
-	rl.l.Println("Running Constago")
+	rl.l.Println("---------------------")
+	rl.l.Println("Running Constago...🚀")
 }
 
 func (rl *runLogger) Step(format string, args ...any) {
