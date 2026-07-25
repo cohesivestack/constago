@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://constago.build/sitemap-index.xml
