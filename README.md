@@ -1,176 +1,229 @@
 # Constago
 
-> **⚠️ Warning: This project is in early development stage and is not ready for production use.**
+Generate compiler-visible Go code from struct field names and tags.
 
-Constago is a Go code generator that scans your codebase for struct types and generates constants, accessor structs, and getter functions derived from struct field tags and names. It helps you replace hard‑coded strings and ad‑hoc reflection with type‑safe, discoverable APIs.
+> [!WARNING]
+> Constago is in early development and is not yet recommended for production use. Review generated code before committing it.
 
-What you can generate:
+[Website and documentation](https://constago.cohesivestack.com)
 
-- Constants or accessor structs for:
-  - Tag values of struct fields (e.g., `json`, `xml`, `yaml`, custom tags)
-  - Field names themselves (with configurable casing and separators)
-- Getter functions that return:
-  - Tag values
-  - Field names
-  - The raw field value at runtime (via the special return token `:value`)
+Constago is a build-time code generator. It scans selected Go structs and turns
+field names and tags such as `json`, `xml`, `yaml`, or your own tags into:
 
-Key features:
+- package constants, such as `JsonUserName`;
+- grouped field accessors, such as `TitleUser.Name`; and
+- methods that return field metadata, the field's runtime value, or both.
 
-- Flexible input selection with include/exclude globs and `package:NAME`
-- Opt-in/opt-out controls for which structs and fields are processed
-- Tag priority resolution (e.g., prefer `json`, fall back to field name, etc.)
-- Configurable output modes: none | constant | struct
-- Formatting options for identifiers (camel, pascal, snake, snakeUpper), plus optional prefix/suffix
-- Value transformations for generated names (case and word separators)
-- Single output file per package (default `constago.gen.go`)
+This is useful anywhere your application needs stable field identifiers—for
+example, validation errors, forms, filters, API payloads, or database mappings.
+Instead of repeating string literals such as `"display_name"` throughout the
+codebase, you can use generated Go identifiers that are discoverable by your
+editor and checked by the compiler.
 
-## Quick Example
+Constago does not serialize data, validate values, or act as an ORM. It derives
+metadata from your structs and generates ordinary Go source code; the generated
+API does not require runtime reflection.
 
-Given a simple model:
+## Quick start
+
+Constago requires Go 1.23 or later.
+
+Install the command:
+
+```bash
+go install github.com/cohesivestack/constago@latest
+```
+
+Given this model:
 
 ```go
 // user.go
 package model
 
 type User struct {
-    Name    string `json:"name" title:"Name"`
-    Country string `json:"country" title:"Country"`
+	Name    string `json:"name" title:"Name"`
+	Country string `json:"country" title:"Country"`
 }
 ```
 
-Configure Constago to generate a Title constant set and a Json accessor struct, plus handy getters that can return the raw field value, a tag value, and a constant label:
+Create `constago.yaml` in the directory where you will run Constago:
 
 ```yaml
-# constago.yaml
 input:
   dir: "."
   include:
     - "**/*.go"
+  exclude:
+    - "**/*_test.go"
+    - "**/constago.gen.go"
+
+output:
+  file_name: "constago.gen.go"
+
 elements:
-  - name: "title"
-    input:
-      mode: "tag"
-      tag_priority:
-        - "title"
-    output:
-      mode: "constant"
   - name: "json"
     input:
       mode: "tag"
-      tag_priority:
-        - "json"
+      tag_priority: ["json"]
+    output:
+      mode: "constant"
+      format:
+        prefix: "Json"
+
+  - name: "title"
+    input:
+      mode: "tag"
+      tag_priority: ["title"]
     output:
       mode: "struct"
       format:
-        prefix: "Json"
+        prefix: "Title"
+
 getters:
-  - name: "Val"
-    returns: [":value", "json", "title"]
+  - name: "metadata"
+    returns: ["json", "title", ":value"]
     output:
-      prefix: "V"
+      prefix: "Metadata"
       format: "pascal"
 ```
 
-Run it in your project folder:
+Run:
 
 ```bash
 constago
 ```
 
-Highlights from the generated file (`constago.gen.go`):
+Constago writes `constago.gen.go` in the selected package. The generated code
+includes:
 
 ```go
-// Constants for User
 const (
-    TitleUserName    = "Name"
-    TitleUserCountry = "Country"
+	JsonUserName    = "name"
+	JsonUserCountry = "country"
 )
 
-// JsonUser contains field constants for User
-type JsonUser struct {
-    Name    string
-    Country string
+var TitleUser = struct {
+	Name    string
+	Country string
+}{
+	Name:    "Name",
+	Country: "Country",
 }
 
-func NewJsonUser() *JsonUser {
-    return &JsonUser{
-        Name:    "name",
-        Country: "country",
-    }
+func (_struct *User) MetadataName() (string, string, string) {
+	return "name", "Name", _struct.Name
 }
 
-// VName returns (value, json tag, title) for User.Name
-func (_struct *User) VName() (string, string, string) {
-    return _struct.Name, "name", "Name"
+func (_struct *User) MetadataCountry() (string, string, string) {
+	return "country", "Country", _struct.Country
 }
 ```
 
-## Config File
+You can then refer to metadata as `JsonUserName` or `TitleUser.Name`, and call
+`user.MetadataName()` when you need the configured metadata together with the
+current field value.
+
+## What you can configure
+
+### Elements
+
+An element defines one string value for every selected field.
+
+- `input.mode: tag` reads the first available tag in `tag_priority`.
+- `input.mode: field` derives the value from the Go field name.
+- `input.mode: tagThenField` reads tags first and falls back to the field name.
+- `output.mode: constant` emits one package constant per field.
+- `output.mode: struct` emits a grouped package variable.
+- `output.mode: none` emits no standalone value but keeps the element available
+  to generated getters.
+
+Generated identifiers support `camel`, `pascal`, `snake`, and `snakeUpper`
+formats, optional prefixes and suffixes, and configurable value transformations.
+
+### Getters
+
+A getter generates one method per selected field. Its `returns` list can contain
+configured element names and the special `:value` token:
 
 ```yaml
-verbose: 1 # 0=silent, 1=verbose steps (default), 2=steps + scanned/generated elements
-
-input:
-  dir: "." # Default "."
-  include: # Where to scan for structs (supports globs and package:NAME). Default "**/*.go"
-    - "**/*.go"
-    - "internal/model/*.go"
-    - "package:myapp"
-  exclude: # Files to exclude from scanning. Default: "**/*_test.go"
-    - "**/*_test.go"
-    - "package:examples"
-  struct:
-    explicit: false # If false, all structs that are in the files matched by the include configuration will be scanned, unless the directive //constago:exclude is placed above the struct. If true, the directive //constago:include must be placed above the struct. Default: false
-    include_unexported: false # If true, unexported structs are included, unless this contains the `//constago:include` directive. Default false
-    include_only: # Regular expression; only struct names matching this are processed (whitelist)
-    include_except: # Regular expression; struct names matching this are excluded (blacklist)
-
-  field:
-    explicit: false # If true, only fields with a `constago` tag are included. When false, you can use the tag constago="exclude" to exclude specific fields. Default: false.
-    include_unexported: false # If false, unexported fields are ignored unless this contains the `constago` tag. Default: false
-    include_only: # Regular expression; only field names matching this are processed (whitelist)
-    include_except: # Regular expression; field names matching this are excluded (blacklist)
-
-output:
-  file_name: "constago.gen.go" # Output file name for generated functions (must end with .go). The files with the generated functions will be created in the same folder used by the source file. Default: "constago.gen.go"
-
-elements:
-  - name: "title" # required
-    input:
-      mode: "tagThenField"         # Mode tag | field | tagThenField. Default tagThenField
-      tag_priority:                # Order of tags to read the field name from. Default [field, json, xml, yaml, toml, sql]
-        - "field"
-        - "json"
-        - "xml"
-        - "yaml"
-        - "toml"
-        - "sql"
-    output:
-      mode: "constant"         # Mode none | constant | struct. Default constant
-      format:
-        holder: "pascal" # The format if an input.field_name.tag_priority is matched. One of: camel | pascal | snake | snakeUpper. Using pascal or snakeUpper will produce exported constants. Default pascal
-        struct: "pascal"
-        prefix: # Default is the name of the tag
-        suffix: # Default not set
-      transform:
-        tag_values: false # default false. If this is false then transform_value_case and transform_value_separator only applies when the field_name is taken from the struct field name
-        value_case: "asIs" # The case type used when transform the field name value. One of: asIs | camel | pascal | upper | lower | sentence. Default: "asIs"
-        value_separator: # The separator between words used when transform the field name value. For example you can get snake case, combining lower case with the _ separator
-
 getters:
-  - name: "title"
-    returns:
-      - "title"
-      - ":value"
-      # Special return tokens supported: ":value"
-    output:
-      prefix: "Field" # The default value is the name of the getter
-      suffix: # Default not set
-      format: "pascal" # The format if an input.field_name.tag_priority is matched. One of: camel | pascal | snake | snakeUpper. Using pascal or snakeUpper will produce exported constants. Default pascal
+  - name: "key"
+    returns: ["json", ":value"]
 ```
 
-# License
+The metadata values are strings. `:value` returns the actual field value using
+its declared Go type, including types that require imports.
 
-Copyright © 2025 Carlos Forero
+### Input selection
 
-Constago is released under the [MIT License](LICENSE)
+You can select source files with include/exclude globs or `package:NAME`, filter
+struct and field names with the `only` and `except` regular-expression options,
+include unexported declarations, or opt individual declarations in and out:
+
+```go
+//constago:include
+type User struct {
+	Name     string `json:"name"`
+	Password string `json:"password" constago:"exclude"`
+}
+```
+
+See [Select Files & Types](https://constago.cohesivestack.com/input-selection/)
+for the complete selection rules.
+
+## Configuration and CLI
+
+Without `--config`, the command looks for `constago.yaml` in the current
+directory:
+
+```bash
+constago
+constago --config ./config/constago.yaml
+constago --help
+```
+
+Basic input and output settings can also be supplied through command-line flags
+or `CONSTAGO_*` environment variables. Elements and getters are configured in
+YAML.
+
+For all keys, defaults, and valid values, see the
+[configuration reference](https://constago.cohesivestack.com/configuration/).
+The documentation also covers the
+[CLI](https://constago.cohesivestack.com/cli/),
+[elements](https://constago.cohesivestack.com/elements/),
+[getters](https://constago.cohesivestack.com/getters/), and
+[library API](https://constago.cohesivestack.com/library/).
+
+## Generation notes
+
+- Constago creates the configured output filename in each selected package
+  directory.
+- Add that filename to `input.exclude`; generated files are not excluded
+  automatically.
+- Struct tag options after the first comma are removed. For example,
+  `json:"name,omitempty"` becomes `name`.
+- Tag values are otherwise literal: `json:"-"` generates `-` unless you exclude
+  that field.
+- Format the output and compile your packages after generation:
+
+```bash
+gofmt -w constago.gen.go
+go test ./...
+```
+
+For reproducible generation in a project, see the
+[`go generate` guide](https://constago.cohesivestack.com/guides/go-generate/).
+
+## Development
+
+Run the test suite:
+
+```bash
+go test ./...
+```
+
+## License
+
+Copyright © 2026 Carlos Forero
+
+Constago is developed and maintained by [Cohesive Stack LLC](https://www.cohesivestack.com) and released under the [MIT License](LICENSE).
