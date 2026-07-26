@@ -14,7 +14,7 @@ want developers to start generation:
 ```go title="generate.go"
 package model
 
-//go:generate go run github.com/cohesivestack/constago@v0.0.7 --config ../constago.yaml
+//go:generate go run github.com/cohesivestack/constago@v0.1.0 --config ../constago.yaml
 ```
 
 Paths are resolved from the package directory where `go generate` runs. Set
@@ -62,7 +62,7 @@ go test ./...
 git diff --exit-code
 ```
 
-Pinning `@v0.0.7` makes local and CI output use the same generator release.
+Pinning `@v0.1.0` makes local and CI output use the same generator release.
 
 ## Avoid scanning generated files
 

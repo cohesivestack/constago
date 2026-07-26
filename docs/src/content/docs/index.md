@@ -11,18 +11,18 @@ tags. It can produce package constants, grouped accessor values, and methods
 that return metadata or the field's runtime value.
 
 :::caution[Early development]
-Constago v0.0.7 is not ready for production use. Review generated changes before
+Constago is not ready for production use. Review generated changes before
 committing them.
 :::
 
 ## Requirements
 
-Constago v0.0.7 requires Go 1.23 or later.
+Constago v0.1.0 requires Go 1.23 or later.
 
 ## Install the command
 
 ```bash
-go install github.com/cohesivestack/constago@v0.0.7
+go install github.com/cohesivestack/constago@v0.1.0
 ```
 
 Make sure the Go binary directory is on your `PATH`, then verify the command:
@@ -34,7 +34,7 @@ constago --help
 You can also run a pinned version without installing it:
 
 ```bash
-go run github.com/cohesivestack/constago@v0.0.7 --help
+go run github.com/cohesivestack/constago@v0.1.0 --help
 ```
 
 ## Create a struct

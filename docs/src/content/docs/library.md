@@ -10,7 +10,7 @@ The command is implemented with the importable package at
 ## Install
 
 ```bash
-go get github.com/cohesivestack/constago@v0.0.7
+go get github.com/cohesivestack/constago@v0.1.0
 ```
 
 Import it with an explicit alias if you want the path and package name to be

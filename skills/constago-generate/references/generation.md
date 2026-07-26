@@ -13,11 +13,11 @@ constago --config constago.yaml
 Run a released version without a global install:
 
 ```bash
-go run github.com/cohesivestack/constago@v0.0.7 --config constago.yaml
+go run github.com/cohesivestack/constago@v0.1.0 --config constago.yaml
 ```
 
 Treat the version above as an example. Preserve the project's existing version
-or select the requested released version instead of assuming `v0.0.7`.
+or select the requested released version instead of assuming `v0.1.0`.
 
 Inspect available flags from the selected executable:
 
@@ -66,7 +66,7 @@ Add a directive to a non-generated file:
 ```go
 package model
 
-//go:generate go run github.com/cohesivestack/constago@v0.0.7 --config ../constago.yaml
+//go:generate go run github.com/cohesivestack/constago@v0.1.0 --config ../constago.yaml
 ```
 
 Pin the version that the project has selected. Paths are resolved from the

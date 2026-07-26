@@ -8,10 +8,10 @@ Add the selected released version through the consuming project's normal module
 workflow:
 
 ```bash
-go get github.com/cohesivestack/constago@v0.0.7
+go get github.com/cohesivestack/constago@v0.1.0
 ```
 
-Treat `v0.0.7` as an example. Preserve an existing version or use the version
+Treat `v0.1.0` as an example. Preserve an existing version or use the version
 selected for the project.
 
 Import the `/lib` path. Its package declaration is `constago`:
