@@ -1,0 +1,4 @@
+interface:
+  display_name: "Configure Constago"
+  short_description: "Create and refine Constago YAML"
+  default_prompt: "Use $constago-configure to create a Constago configuration for the Go structs in this project."

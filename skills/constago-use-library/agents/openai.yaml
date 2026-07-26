@@ -1,0 +1,4 @@
+interface:
+  display_name: "Use the Constago Go Library"
+  short_description: "Integrate Constago through its Go API"
+  default_prompt: "Use $constago-use-library to integrate Constago programmatically into this Go project."

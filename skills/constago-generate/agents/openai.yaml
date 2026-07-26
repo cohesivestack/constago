@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate with Constago"
+  short_description: "Run and verify Constago generation"
+  default_prompt: "Use $constago-generate to regenerate Constago output and verify the resulting Go code."
